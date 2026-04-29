@@ -2,7 +2,6 @@ import AppHeader from '../../components/app-header/app-header'
 import KnowledgeGraph from '../../components/knowledge-graph/knowledge-graph'
 import styles from './dashboarad.module.scss'
 
-const modes = ['文字输入', '语音识别', '馆藏检索', '图谱生成', '引用来源']
 const entries = [
   { title: '青铜器纹饰', tone: 'green' },
   { title: '商代礼制', tone: 'red' },
@@ -97,14 +96,6 @@ export default function MuseumAiPage() {
               <h2>与历史对话</h2>
             </div>
           </header>
-
-          <div className={styles.modeChips} aria-label="对话模式">
-            {modes.map((mode, index) => (
-              <Chip key={mode} active={index === 0}>
-                {mode}
-              </Chip>
-            ))}
-          </div>
 
           <div className={styles.welcomeState}>
             <div className={styles.aiMark}>AI</div>

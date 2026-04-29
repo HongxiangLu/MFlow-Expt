@@ -9,14 +9,6 @@ type AppHeaderProps = {
   status?: string
 }
 
-function ActionButton({ children, label }: { children: string; label: string }) {
-  return (
-    <button className={styles.iconButton} type="button" aria-label={label} title={label}>
-      {children}
-    </button>
-  )
-}
-
 export default function AppHeader({
   title = '文博知识图谱 AI 助手',
   subtitle = 'Cultural and Creative Knowledge Graph AI Assistant',
@@ -31,10 +23,6 @@ export default function AppHeader({
           <h1>{title}</h1>
           <p>{subtitle}</p>
         </div>
-      </div>
-      <div className={styles.headerActions}>
-        <ActionButton label="搜索">⌕</ActionButton>
-        <ActionButton label="设置">⚙</ActionButton>
       </div>
     </section>
   )
