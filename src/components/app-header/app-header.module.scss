@@ -1,0 +1,141 @@
+$paper: #fffcf5;
+$surface: #faf5e8;
+$ink: #1a1714;
+$muted: #736657;
+$red: #8c211a;
+$gold: #b88538;
+$soft-border: rgba(212, 199, 173, 0.7);
+
+@mixin center {
+  display: grid;
+  place-items: center;
+}
+
+.topNav {
+  width: 100%;
+  min-width: 1120px;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0;
+  padding: 14px 22px;
+  background: $paper;
+  border: 1px solid $soft-border;
+  border-radius: 0;
+  box-shadow: 0 8px 22px rgba(41, 26, 13, 0.08);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 360px;
+}
+
+.seal {
+  width: 44px;
+  height: 44px;
+  @include center;
+  flex: 0 0 auto;
+  overflow: hidden;
+
+  img {
+    width: 44px;
+    height: 44px;
+    display: block;
+  }
+}
+
+.brandCopy {
+  display: grid;
+  gap: 2px;
+
+  h1 {
+    margin: 0;
+    color: $ink;
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 21px;
+    letter-spacing: 0;
+  }
+
+  p {
+    color: $muted;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 13px;
+  }
+}
+
+.mainTabs {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 420px;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  width: 270px;
+}
+
+.chip {
+  min-width: 78px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 14px;
+  background: $surface;
+  color: $muted;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 12px;
+  white-space: nowrap;
+}
+
+.chipActive {
+  background: $ink;
+  color: white;
+}
+
+.chipWarning {
+  min-width: 66px;
+  background: #faf0d6;
+  color: $gold;
+}
+
+.iconButton {
+  width: 40px;
+  height: 40px;
+  @include center;
+  border: 0;
+  border-radius: 50%;
+  background: $surface;
+  color: $ink;
+  font: 800 12px/12px inherit;
+  cursor: pointer;
+}
+
+@media (max-width: 1199px) {
+  .topNav {
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    flex-wrap: wrap;
+    gap: 14px;
+  }
+
+  .brand,
+  .mainTabs,
+  .headerActions {
+    width: auto;
+  }
+}
