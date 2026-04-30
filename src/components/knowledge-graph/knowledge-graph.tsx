@@ -134,6 +134,36 @@ export default function KnowledgeGraph() {
     let minimapDragOffset = { x: 0, y: 0 }
     let fullscreenResizeTimeout: number | undefined
 
+    function getGraphContainerBounds() {
+      const graphContainer = graphRef.current
+      if (!graphContainer) return null
+
+      const graphRect = graphContainer.getBoundingClientRect()
+      const minimapRect = minimapContainer.getBoundingClientRect()
+
+      return {
+        graphRect,
+        minimapRect,
+        maxLeft: Math.max(0, graphRect.width - minimapRect.width),
+        maxTop: Math.max(0, graphRect.height - minimapRect.height),
+      }
+    }
+
+    function clampMinimapPosition() {
+      const bounds = getGraphContainerBounds()
+      if (!bounds || (!minimapContainer.style.left && !minimapContainer.style.top)) return
+
+      const currentLeft = bounds.minimapRect.left - bounds.graphRect.left
+      const currentTop = bounds.minimapRect.top - bounds.graphRect.top
+      const nextLeft = Math.max(0, Math.min(currentLeft, bounds.maxLeft))
+      const nextTop = Math.max(0, Math.min(currentTop, bounds.maxTop))
+
+      minimapContainer.style.left = `${nextLeft}px`
+      minimapContainer.style.top = `${nextTop}px`
+      minimapContainer.style.right = 'auto'
+      minimapContainer.style.bottom = 'auto'
+    }
+
     function syncMinimapViewport() {
       const viewport = minimapViewportRef.current
       if (!viewport) return
@@ -163,15 +193,17 @@ export default function KnowledgeGraph() {
     }
 
     function moveMinimap(event: PointerEvent) {
-      const graphContainer = minimapContainer.offsetParent as HTMLElement | null
-      if (!graphContainer) return
+      const bounds = getGraphContainerBounds()
+      if (!bounds) return
 
-      const graphRect = graphContainer.getBoundingClientRect()
-      const rect = minimapContainer.getBoundingClientRect()
-      const maxLeft = Math.max(0, graphRect.width - rect.width)
-      const maxTop = Math.max(0, graphRect.height - rect.height)
-      const nextLeft = Math.max(0, Math.min(event.clientX - graphRect.left - minimapDragOffset.x, maxLeft))
-      const nextTop = Math.max(0, Math.min(event.clientY - graphRect.top - minimapDragOffset.y, maxTop))
+      const nextLeft = Math.max(
+        0,
+        Math.min(event.clientX - bounds.graphRect.left - minimapDragOffset.x, bounds.maxLeft),
+      )
+      const nextTop = Math.max(
+        0,
+        Math.min(event.clientY - bounds.graphRect.top - minimapDragOffset.y, bounds.maxTop),
+      )
 
       minimapContainer.style.left = `${nextLeft}px`
       minimapContainer.style.top = `${nextTop}px`
@@ -205,6 +237,7 @@ export default function KnowledgeGraph() {
     function handleFullscreenChange() {
       window.clearTimeout(fullscreenResizeTimeout)
       fullscreenResizeTimeout = window.setTimeout(() => {
+        clampMinimapPosition()
         renderer.resize()
         minimapRenderer.resize()
         syncMinimapViewport()
