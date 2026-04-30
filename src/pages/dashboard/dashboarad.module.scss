@@ -97,7 +97,7 @@ $page-bottom-gap: 8px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 0 20px;
+  padding: 18px 20px;
 }
 
 .leftPanel h2,
@@ -334,7 +334,7 @@ $page-bottom-gap: 8px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 52px;
+  min-height: 0;
 }
 
 .panelHeader div:first-child {
