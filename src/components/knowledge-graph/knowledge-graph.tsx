@@ -31,6 +31,8 @@ const nodes: Array<[string, Omit<NodeAttributes, 'x' | 'y'>]> = [
   ['inscription', { label: '铭文', size: 10, color: '#b88538' }],
 ]
 
+const rootNodeSize = nodes[0][1].size
+
 const edges: Array<[string, string, string, string, number]> = [
   ['simuwu-ding', 'shang', '所属年代', 'e1', 1.2],
   ['simuwu-ding', 'bronze', '器物类别', 'e2', 1.5],
@@ -80,9 +82,11 @@ function buildGraph() {
 
 export default function KnowledgeGraph() {
   const containerRef = useRef<HTMLDivElement>(null)
+  const minimapRef = useRef<HTMLDivElement>(null)
+  const minimapViewportRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (!containerRef.current) return
+    if (!containerRef.current || !minimapRef.current) return
 
     const graph = buildGraph()
     const renderer = new Sigma(graph, containerRef.current, {
@@ -104,11 +108,94 @@ export default function KnowledgeGraph() {
       renderLabels: true,
       stagePadding: 24,
     })
+    const minimapRenderer = new Sigma(graph, minimapRef.current, {
+      allowInvalidContainer: true,
+      autoCenter: true,
+      autoRescale: true,
+      defaultEdgeColor: '#d8cfc1',
+      defaultEdgeType: 'line',
+      enableCameraPanning: false,
+      enableCameraRotation: false,
+      enableCameraZooming: false,
+      labelDensity: 0,
+      renderEdgeLabels: false,
+      renderLabels: false,
+      stagePadding: 8,
+    })
+
+    function syncMinimapViewport() {
+      const viewport = minimapViewportRef.current
+      if (!viewport) return
+
+      const { width, height } = renderer.getDimensions()
+      if (width <= 1 || height <= 1) return
+
+      const points = [
+        { x: 0, y: 0 },
+        { x: width, y: 0 },
+        { x: width, y: height },
+        { x: 0, y: height },
+      ]
+        .map((point) => renderer.viewportToFramedGraph(point))
+        .map((point) => minimapRenderer.framedGraphToViewport(point))
+
+      const xValues = points.map((point) => point.x)
+      const yValues = points.map((point) => point.y)
+      const left = Math.min(...xValues)
+      const top = Math.min(...yValues)
+      const right = Math.max(...xValues)
+      const bottom = Math.max(...yValues)
+
+      viewport.style.transform = `translate(${left}px, ${top}px)`
+      viewport.style.width = `${right - left}px`
+      viewport.style.height = `${bottom - top}px`
+    }
+
+    renderer.on('clickNode', ({ node }) => {
+      nodes.forEach(([key, attributes]) => {
+        graph.setNodeAttribute(key, 'size', key === node ? rootNodeSize : attributes.size)
+      })
+
+      const nodeAttributes = graph.getNodeAttributes(node)
+      const nodeViewportPosition = renderer.graphToViewport(nodeAttributes)
+      const nodeCameraPosition = renderer.viewportToFramedGraph(nodeViewportPosition)
+      const camera = renderer.getCamera()
+      const cameraState = camera.getState()
+      const { width, height } = renderer.getDimensions()
+      const centerCameraPosition = renderer.viewportToFramedGraph({
+        x: width / 2,
+        y: height / 2,
+      })
+
+      void camera.animate(
+        {
+          x: cameraState.x + nodeCameraPosition.x - centerCameraPosition.x,
+          y: cameraState.y + nodeCameraPosition.y - centerCameraPosition.y,
+        },
+        {
+          duration: 520,
+        },
+      )
+    })
+    renderer.getCamera().on('updated', syncMinimapViewport)
+    renderer.on('resize', syncMinimapViewport)
+    minimapRenderer.on('resize', syncMinimapViewport)
+
+    requestAnimationFrame(syncMinimapViewport)
 
     return () => {
       renderer.kill()
+      minimapRenderer.kill()
     }
   }, [])
 
-  return <div className={styles.graph} ref={containerRef} aria-label="文物关系图谱模拟数据" />
+  return (
+    <div className={styles.graph}>
+      <div className={styles.graphStage} ref={containerRef} aria-label="文物关系图谱模拟数据" />
+      <div className={styles.minimap} aria-hidden="true">
+        <div className={styles.minimapStage} ref={minimapRef} />
+        <div className={styles.minimapViewport} ref={minimapViewportRef} />
+      </div>
+    </div>
+  )
 }

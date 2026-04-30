@@ -23,7 +23,7 @@ export default function AppHeader({
       </div>
         <div className={styles.searchInput}>
           <span className={styles.searchIcon}>⌕</span>
-          <span>搜索文物名称 / 纹饰 / 年代</span>
+          <span>搜索文物名称/ 年代</span>
         </div>
     </section>
   )
