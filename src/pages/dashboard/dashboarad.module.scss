@@ -63,7 +63,7 @@ $page-bottom-gap: 8px;
 .workspace {
   height: calc(100svh - #{$header-height} - #{$workspace-top-gap} - #{$page-bottom-gap * 2});
   display: grid;
-  grid-template-columns: 384px 1000px 454px;
+  grid-template-columns: 384px 950px 504px;
   gap: 18px;
   align-items: start;
   margin-top: $workspace-top-gap;
@@ -83,6 +83,10 @@ $page-bottom-gap: 8px;
   flex-direction: column;
   gap: 14px;
   padding: 18px;
+}
+
+.graphPanel {
+  min-height: 0;
 }
 
 .leftPanel {
@@ -441,7 +445,8 @@ $page-bottom-gap: 8px;
 }
 
 .graphCanvas {
-  height: 460px;
+  flex: 1;
+  min-height: 0;
   position: relative;
   overflow: hidden;
   border: 1px solid rgba(212, 199, 173, 0.65);

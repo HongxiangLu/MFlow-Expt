@@ -31,7 +31,7 @@ const nodes: Array<[string, Omit<NodeAttributes, 'x' | 'y'>]> = [
   ['inscription', { label: '铭文', size: 10, color: '#b88538' }],
 ]
 
-const rootNodeSize = nodes[0][1].size
+const focusedCameraRatio = 0.55
 
 const edges: Array<[string, string, string, string, number]> = [
   ['simuwu-ding', 'shang', '所属年代', 'e1', 1.2],
@@ -114,13 +114,18 @@ export default function KnowledgeGraph() {
       autoRescale: true,
       defaultEdgeColor: '#d8cfc1',
       defaultEdgeType: 'line',
+      edgeReducer: (_, attributes) => ({
+        ...attributes,
+        color: 'rgba(115, 102, 87, 0.78)',
+        size: 1.2,
+      }),
       enableCameraPanning: false,
       enableCameraRotation: false,
       enableCameraZooming: false,
       labelDensity: 0,
       renderEdgeLabels: false,
       renderLabels: false,
-      stagePadding: 8,
+      stagePadding: 20,
     })
 
     function syncMinimapViewport() {
@@ -152,25 +157,17 @@ export default function KnowledgeGraph() {
     }
 
     renderer.on('clickNode', ({ node }) => {
-      nodes.forEach(([key, attributes]) => {
-        graph.setNodeAttribute(key, 'size', key === node ? rootNodeSize : attributes.size)
-      })
-
       const nodeAttributes = graph.getNodeAttributes(node)
       const nodeViewportPosition = renderer.graphToViewport(nodeAttributes)
       const nodeCameraPosition = renderer.viewportToFramedGraph(nodeViewportPosition)
       const camera = renderer.getCamera()
       const cameraState = camera.getState()
-      const { width, height } = renderer.getDimensions()
-      const centerCameraPosition = renderer.viewportToFramedGraph({
-        x: width / 2,
-        y: height / 2,
-      })
 
       void camera.animate(
         {
-          x: cameraState.x + nodeCameraPosition.x - centerCameraPosition.x,
-          y: cameraState.y + nodeCameraPosition.y - centerCameraPosition.y,
+          x: nodeCameraPosition.x,
+          y: nodeCameraPosition.y,
+          ratio: Math.min(cameraState.ratio, focusedCameraRatio),
         },
         {
           duration: 520,

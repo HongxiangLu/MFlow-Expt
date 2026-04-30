@@ -38,12 +38,6 @@ const prompts = [
   '生成一段适合展厅观众阅读的文物说明',
 ]
 const recentTopics = ['青铜器', '陶俑', '丝路文物']
-const checklist = [
-  { text: '实体识别：8 个模拟实体', tone: 'green' },
-  { text: '关系抽取：9 条模拟关系', tone: 'gold' },
-  { text: '证据溯源：示例权重已生成', tone: 'gold' },
-]
-
 function classNames(...names: Array<string | false | undefined>) {
   return names.filter(Boolean).join(' ')
 }
@@ -69,11 +63,6 @@ function Chip({
     </span>
   )
 }
-
-function Dot({ tone }: { tone: string }) {
-  return <span className={classNames(styles.dot, styles[`dot${tone}`])} aria-hidden="true" />
-}
-
 export default function MuseumAiPage() {
   const [query, setQuery] = useState('')
   const relatedListRef = useRef<HTMLDivElement>(null)
@@ -215,18 +204,6 @@ export default function MuseumAiPage() {
 
           <div className={styles.graphCanvas} aria-label="文物关系图谱">
             <KnowledgeGraph />
-          </div>
-
-          <div className={styles.graphNote}>
-            <h3>司母戊鼎关系图谱</h3>
-            <div className={styles.checklist}>
-              {checklist.map((item) => (
-                <div className={styles.checkRow} key={item.text}>
-                  <Dot tone={item.tone} />
-                  <span>{item.text}</span>
-                </div>
-              ))}
-            </div>
           </div>
         </aside>
       </section>
