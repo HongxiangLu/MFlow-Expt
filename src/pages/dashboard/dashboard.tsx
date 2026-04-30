@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import AppHeader from '../../components/app-header/app-header'
 import KnowledgeGraph from '../../components/knowledge-graph/knowledge-graph'
+import artifactMockUrl from '../../../mock/mock.jpg'
 import styles from './dashboarad.module.scss'
 
 const entries = [
@@ -13,7 +15,7 @@ const prompts = [
   '我想了解殷墟出土文物和祭祀制度',
   '生成一段适合展厅观众阅读的文物说明',
 ]
-const recentTopics = ['最近：青铜器', '最近：陶俑', '最近：丝路文物']
+const recentTopics = ['青铜器', '陶俑', '丝路文物']
 const checklist = [
   { text: '实体识别：8 个模拟实体', tone: 'green' },
   { text: '关系抽取：9 条模拟关系', tone: 'gold' },
@@ -29,21 +31,31 @@ function Chip({
   active = false,
   warning = false,
   className,
+  onClick,
 }: {
   children: string
   active?: boolean
   warning?: boolean
   className?: string
+  onClick?: () => void
 }) {
+  const chipClassName = classNames(
+    styles.chip,
+    active && styles.chipActive,
+    warning && styles.chipWarning,
+    className,
+  )
+
+  if (onClick) {
+    return (
+      <button className={chipClassName} type="button" onClick={onClick}>
+        {children}
+      </button>
+    )
+  }
+
   return (
-    <span
-      className={classNames(
-        styles.chip,
-        active && styles.chipActive,
-        warning && styles.chipWarning,
-        className,
-      )}
-    >
+    <span className={chipClassName}>
       {children}
     </span>
   )
@@ -54,26 +66,16 @@ function Dot({ tone }: { tone: string }) {
 }
 
 export default function MuseumAiPage() {
+  const [query, setQuery] = useState('')
+
   return (
     <main className={styles.page}>
       <AppHeader />
-
       <section className={styles.workspace} aria-label="文博 AI 智能问答工作台">
         <aside className={classNames(styles.panel, styles.leftPanel)}>
-          <h2>开始研究</h2>
-
-          <div className={styles.searchBox}>
-            <div className={styles.searchInput}>
-              <span className={styles.searchIcon}>⌕</span>
-              <span>搜索文物名称 / 纹饰 / 年代</span>
-            </div>
-            <p>搜索后将在这里显示文物图片、名称、简介和馆藏信息。</p>
-          </div>
-
+          <h2>文物信息</h2>
           <div className={styles.artifactPlaceholder}>
-            <div className={styles.artifactIcon}>器</div>
-            <strong>尚未选择研究对象</strong>
-            <p>可先搜索馆藏，也可以直接向 AI 提问。</p>
+            <img src={artifactMockUrl} alt="研究对象文物" />
           </div>
 
           <h3>热门研究入口</h3>
@@ -114,15 +116,22 @@ export default function MuseumAiPage() {
 
           <div className={styles.recentTopics} aria-label="最近话题">
             {recentTopics.map((topic) => (
-              <Chip key={topic}>{topic}</Chip>
+              <Chip key={topic} onClick={() => setQuery(topic)}>
+                {topic}
+              </Chip>
             ))}
           </div>
 
-          <form className={styles.composer}>
-            <label>
-              <span>搜索文物或输入你的第一个问题...</span>
-              <small>支持文字输入与语音识别</small>
-            </label>
+          <form className={styles.composer} onSubmit={(event) => event.preventDefault()}>
+            <input
+              className={styles.composerInput}
+              type="text"
+              aria-label="搜索文物或输入你的第一个问题"
+              placeholder="搜索文物或输入你的第一个问题..."
+              autoComplete="off"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
           </form>
         </section>
 

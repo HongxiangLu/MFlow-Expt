@@ -1,5 +1,6 @@
 $paper: #fffcf5;
 $surface: #faf5e8;
+$surface-strong: #f7f2e5;
 $ink: #1a1714;
 $muted: #736657;
 $red: #8c211a;
@@ -24,6 +25,30 @@ $soft-border: rgba(212, 199, 173, 0.7);
   border: 1px solid $soft-border;
   border-radius: 0;
   box-shadow: 0 8px 22px rgba(41, 26, 13, 0.08);
+}
+
+.searchInput {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid $soft-border;
+  border-radius: 20px;
+  background: $paper;
+  color: $muted;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.searchIcon {
+  width: 26px;
+  height: 26px;
+  @include center;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: $surface;
+  font-weight: 800;
 }
 
 .brand {
@@ -135,7 +160,12 @@ $soft-border: rgba(212, 199, 173, 0.7);
 
   .brand,
   .mainTabs,
-  .headerActions {
+  .headerActions,
+  .searchBox {
     width: auto;
+  }
+
+  .searchBox {
+    flex: 1 1 100%;
   }
 }
