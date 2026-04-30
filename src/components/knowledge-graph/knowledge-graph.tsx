@@ -81,6 +81,7 @@ function buildGraph() {
 }
 
 export default function KnowledgeGraph() {
+  const graphRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const minimapContainerRef = useRef<HTMLDivElement>(null)
   const minimapRef = useRef<HTMLDivElement>(null)
@@ -131,6 +132,7 @@ export default function KnowledgeGraph() {
     const minimapContainer = minimapContainerRef.current
     let isDraggingMinimap = false
     let minimapDragOffset = { x: 0, y: 0 }
+    let fullscreenResizeTimeout: number | undefined
 
     function syncMinimapViewport() {
       const viewport = minimapViewportRef.current
@@ -200,6 +202,15 @@ export default function KnowledgeGraph() {
       minimapContainer.style.cursor = ''
     }
 
+    function handleFullscreenChange() {
+      window.clearTimeout(fullscreenResizeTimeout)
+      fullscreenResizeTimeout = window.setTimeout(() => {
+        renderer.resize()
+        minimapRenderer.resize()
+        syncMinimapViewport()
+      }, 80)
+    }
+
     renderer.on('clickNode', ({ node }) => {
       const nodeAttributes = graph.getNodeAttributes(node)
       const nodeViewportPosition = renderer.graphToViewport(nodeAttributes)
@@ -225,22 +236,42 @@ export default function KnowledgeGraph() {
     window.addEventListener('pointermove', handleMinimapPointerMove)
     window.addEventListener('pointerup', handleMinimapPointerUp)
     window.addEventListener('pointercancel', handleMinimapPointerUp)
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
 
     requestAnimationFrame(syncMinimapViewport)
 
     return () => {
+      window.clearTimeout(fullscreenResizeTimeout)
       minimapContainer.removeEventListener('pointerdown', handleMinimapPointerDown)
       window.removeEventListener('pointermove', handleMinimapPointerMove)
       window.removeEventListener('pointerup', handleMinimapPointerUp)
       window.removeEventListener('pointercancel', handleMinimapPointerUp)
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
       renderer.kill()
       minimapRenderer.kill()
     }
   }, [])
 
+  async function toggleFullscreen() {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen()
+      return
+    }
+
+    await graphRef.current?.requestFullscreen()
+  }
+
   return (
-    <div className={styles.graph}>
+    <div className={styles.graph} ref={graphRef}>
       <div className={styles.graphStage} ref={containerRef} aria-label="文物关系图谱模拟数据" />
+      <button
+        className={styles.fullscreenButton}
+        type="button"
+        aria-label="切换关系图谱全屏"
+        onClick={toggleFullscreen}
+      >
+        ⛶
+      </button>
       <div className={styles.minimap} ref={minimapContainerRef} aria-label="拖拽移动小地图位置">
         <div className={styles.minimapStage} ref={minimapRef} />
         <div className={styles.minimapViewport} ref={minimapViewportRef} />
