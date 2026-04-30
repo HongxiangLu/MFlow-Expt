@@ -8,13 +8,11 @@ __pycache__/
 venv/
 .venv/
 
-# M-Flow 数据目录
-.data/
-.system/
+# 运行时数据目录（M-Flow 数据 + 后端 SQLite）
+.runtime/
 
 # SQLite 数据库文件
 *.db
-*.sqlite3
 
 # IDE
 .vscode/
