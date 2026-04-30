@@ -71,8 +71,8 @@ function buildGraph() {
     iterations: 160,
     settings: {
       gravity: 1.2,
-      scalingRatio: 8,
-      slowDown: 8,
+      scalingRatio: 6,
+      slowDown: 6,
       edgeWeightInfluence: 0.8,
     },
   })
@@ -82,11 +82,12 @@ function buildGraph() {
 
 export default function KnowledgeGraph() {
   const containerRef = useRef<HTMLDivElement>(null)
+  const minimapContainerRef = useRef<HTMLDivElement>(null)
   const minimapRef = useRef<HTMLDivElement>(null)
   const minimapViewportRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (!containerRef.current || !minimapRef.current) return
+    if (!containerRef.current || !minimapContainerRef.current || !minimapRef.current) return
 
     const graph = buildGraph()
     const renderer = new Sigma(graph, containerRef.current, {
@@ -127,6 +128,9 @@ export default function KnowledgeGraph() {
       renderLabels: false,
       stagePadding: 20,
     })
+    const minimapContainer = minimapContainerRef.current
+    let isDraggingMinimap = false
+    let minimapDragOffset = { x: 0, y: 0 }
 
     function syncMinimapViewport() {
       const viewport = minimapViewportRef.current
@@ -156,6 +160,46 @@ export default function KnowledgeGraph() {
       viewport.style.height = `${bottom - top}px`
     }
 
+    function moveMinimap(event: PointerEvent) {
+      const graphContainer = minimapContainer.offsetParent as HTMLElement | null
+      if (!graphContainer) return
+
+      const graphRect = graphContainer.getBoundingClientRect()
+      const rect = minimapContainer.getBoundingClientRect()
+      const maxLeft = Math.max(0, graphRect.width - rect.width)
+      const maxTop = Math.max(0, graphRect.height - rect.height)
+      const nextLeft = Math.max(0, Math.min(event.clientX - graphRect.left - minimapDragOffset.x, maxLeft))
+      const nextTop = Math.max(0, Math.min(event.clientY - graphRect.top - minimapDragOffset.y, maxTop))
+
+      minimapContainer.style.left = `${nextLeft}px`
+      minimapContainer.style.top = `${nextTop}px`
+      minimapContainer.style.right = 'auto'
+      minimapContainer.style.bottom = 'auto'
+    }
+
+    function handleMinimapPointerDown(event: PointerEvent) {
+      event.preventDefault()
+      const rect = minimapContainer.getBoundingClientRect()
+      isDraggingMinimap = true
+      minimapDragOffset = {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+      }
+      minimapContainer.style.cursor = 'grabbing'
+      moveMinimap(event)
+    }
+
+    function handleMinimapPointerMove(event: PointerEvent) {
+      if (!isDraggingMinimap) return
+      event.preventDefault()
+      moveMinimap(event)
+    }
+
+    function handleMinimapPointerUp() {
+      isDraggingMinimap = false
+      minimapContainer.style.cursor = ''
+    }
+
     renderer.on('clickNode', ({ node }) => {
       const nodeAttributes = graph.getNodeAttributes(node)
       const nodeViewportPosition = renderer.graphToViewport(nodeAttributes)
@@ -177,10 +221,18 @@ export default function KnowledgeGraph() {
     renderer.getCamera().on('updated', syncMinimapViewport)
     renderer.on('resize', syncMinimapViewport)
     minimapRenderer.on('resize', syncMinimapViewport)
+    minimapContainer.addEventListener('pointerdown', handleMinimapPointerDown)
+    window.addEventListener('pointermove', handleMinimapPointerMove)
+    window.addEventListener('pointerup', handleMinimapPointerUp)
+    window.addEventListener('pointercancel', handleMinimapPointerUp)
 
     requestAnimationFrame(syncMinimapViewport)
 
     return () => {
+      minimapContainer.removeEventListener('pointerdown', handleMinimapPointerDown)
+      window.removeEventListener('pointermove', handleMinimapPointerMove)
+      window.removeEventListener('pointerup', handleMinimapPointerUp)
+      window.removeEventListener('pointercancel', handleMinimapPointerUp)
       renderer.kill()
       minimapRenderer.kill()
     }
@@ -189,7 +241,7 @@ export default function KnowledgeGraph() {
   return (
     <div className={styles.graph}>
       <div className={styles.graphStage} ref={containerRef} aria-label="文物关系图谱模拟数据" />
-      <div className={styles.minimap} aria-hidden="true">
+      <div className={styles.minimap} ref={minimapContainerRef} aria-label="拖拽移动小地图位置">
         <div className={styles.minimapStage} ref={minimapRef} />
         <div className={styles.minimapViewport} ref={minimapViewportRef} />
       </div>

@@ -20,7 +20,10 @@
   border-radius: 8px;
   background: rgba(255, 252, 246, 0.82);
   box-shadow: 0 10px 24px rgba(52, 44, 35, 0.16);
-  pointer-events: none;
+  cursor: grab;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
 }
 
 .minimapStage {
@@ -37,4 +40,5 @@
   border: 1px solid rgba(140, 33, 26, 0.9);
   background: rgba(140, 33, 26, 0.08);
   box-shadow: 0 0 0 999px rgba(255, 252, 246, 0.28);
+  pointer-events: none;
 }
