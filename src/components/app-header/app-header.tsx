@@ -4,9 +4,6 @@ import styles from './app-header.module.scss'
 type AppHeaderProps = {
   title?: string
   subtitle?: string
-  tabs?: string[]
-  activeTabIndex?: number
-  status?: string
 }
 
 export default function AppHeader({

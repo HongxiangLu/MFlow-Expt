@@ -5,19 +5,12 @@ $ink: #1a1714;
 $muted: #736657;
 $line: rgba(212, 199, 173, 0.75);
 $green: #0d6157;
-$red: #8c211a;
 $gold: #b88538;
 $page-bg: #f2ede3;
-$soft-border: rgba(212, 199, 173, 0.7);
 $header-height: 72px;
 $workspace-top-gap: 18px;
 $workspace-gutter: 18px;
 $page-bottom-gap: 8px;
-
-@mixin center {
-  display: grid;
-  place-items: center;
-}
 
 .page {
   height: 100svh;
@@ -67,29 +60,6 @@ $page-bottom-gap: 8px;
   transform: translateY(-1px);
 }
 
-.chipActive {
-  background: $ink;
-  color: white;
-}
-
-.chipWarning {
-  min-width: 66px;
-  background: #faf0d6;
-  color: $gold;
-}
-
-.iconButton {
-  width: 40px;
-  height: 40px;
-  @include center;
-  border: 0;
-  border-radius: 50%;
-  background: $surface;
-  color: $ink;
-  font: 800 12px/12px inherit;
-  cursor: pointer;
-}
-
 .workspace {
   height: calc(100svh - #{$header-height} - #{$workspace-top-gap} - #{$page-bottom-gap * 2});
   display: grid;
@@ -113,6 +83,10 @@ $page-bottom-gap: 8px;
   flex-direction: column;
   gap: 14px;
   padding: 18px;
+}
+
+.leftPanel {
+  overflow-y: auto;
 }
 
 .chatPanel {
@@ -142,7 +116,6 @@ $page-bottom-gap: 8px;
   line-height: 21px;
 }
 
-.leftPanel h3,
 .graphNote h3 {
   margin: 0;
   color: $ink;
@@ -153,13 +126,22 @@ $page-bottom-gap: 8px;
 }
 
 .artifactPlaceholder {
-  height: 270px;
   overflow: hidden;
   border-radius: 8px;
+  background: $surface-strong;
+  border: 1px solid rgba(212, 199, 173, 0.75);
+  box-shadow: 0 8px 18px rgba(41, 26, 13, 0.08);
+  color: $ink;
+}
+
+.artifactImageFrame {
+  height: 270px;
+  overflow: hidden;
+  border-bottom: 1px solid rgba(212, 199, 173, 0.75);
   background: $surface;
 }
 
-.artifactPlaceholder img {
+.artifactImageFrame img {
   width: 100%;
   height: 100%;
   display: block;
@@ -167,41 +149,165 @@ $page-bottom-gap: 8px;
   object-position: center;
 }
 
-.entryList {
+.artifactInfo {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.artifactTitleBlock {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(212, 199, 173, 0.75);
+}
+
+.artifactTitleBlock h3 {
+  margin: 0;
+  color: $ink;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 26px;
+}
+
+.artifactTitleBlock p {
+  margin: 0;
+  color: $gold;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 15px;
+}
+
+.artifactFacts {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0 0 14px;
+  border-bottom: 1px solid rgba(212, 199, 173, 0.75);
+}
+
+.artifactFact {
+  display: grid;
+  grid-template-columns: 78px 1fr;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.artifactFact dt {
+  color: $muted;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 15px;
+}
+
+.artifactFact dd {
+  margin: 0;
+  color: $ink;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 16px;
+}
+
+.artifactIntro {
+  display: grid;
+  gap: 8px;
+}
+
+.artifactIntro p {
+  margin: 0;
+  color: $muted;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 19px;
+}
+
+.relatedArtifacts {
+  position: relative;
   display: grid;
   gap: 10px;
 }
 
-.entryRow {
-  height: 46px;
+.relatedArtifactHeader {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
-  padding: 0 12px;
-  border: 0;
+  min-height: 26px;
+}
+
+.relatedArtifactHeader h3 {
+  margin: 0;
+  color: $ink;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 17px;
+}
+
+.relatedArtifactControls {
+  display: flex;
+  justify-content: space-between;
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 53px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.relatedArtifactControls button {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(212, 199, 173, 0.75);
+  border-radius: 50%;
+  background: rgba($paper, 0.72);
+  color: $ink;
+  font: 800 13px/13px inherit;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: 0 4px 12px rgba(41, 26, 13, 0.18);
+  transition: background 160ms ease;
+}
+
+.relatedArtifactControls button:hover {
+  background: $paper;
+}
+
+.relatedArtifactList {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 0;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+  scroll-behavior: smooth;
+}
+
+.relatedArtifactList::-webkit-scrollbar {
+  display: none;
+}
+
+.relatedArtifactCard {
+  width: 60px;
+  height: 60px;
+  flex: 0 0 60px;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid rgba(212, 199, 173, 0.75);
   border-radius: 7px;
   background: $surface;
-  color: $ink;
-  text-align: left;
   cursor: pointer;
+  scroll-snap-align: start;
 }
 
-.entryRow span:not(.dot) {
-  display: grid;
-  gap: 2px;
-}
-
-.entryRow strong {
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 13px;
-}
-
-.entryRow small {
-  color: $muted;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 12px;
+.relatedArtifactCard img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center;
 }
 
 .dot {
@@ -214,14 +320,6 @@ $page-bottom-gap: 8px;
 
 .dotgreen {
   background: $green;
-}
-
-.dotred {
-  background: $red;
-}
-
-.dotblue {
-  background: #2d5f83;
 }
 
 .dotgold {
@@ -245,26 +343,6 @@ $page-bottom-gap: 8px;
   font-size: 12px;
   font-weight: 600;
   line-height: 14px;
-}
-
-.greenText {
-  color: $green !important;
-}
-
-.statusGroup {
-  display: flex !important;
-  align-items: center;
-  gap: 8px;
-}
-
-.statusGroup .iconButton {
-  width: 34px;
-  height: 34px;
-}
-
-.modeChips {
-  display: flex;
-  gap: 8px;
 }
 
 .welcomeState {
@@ -362,24 +440,6 @@ $page-bottom-gap: 8px;
   opacity: 1;
 }
 
-.composer button {
-  width: 42px;
-  height: 42px;
-  border: 0;
-  border-radius: 50%;
-  color: white;
-  font: 800 12px/12px inherit;
-  cursor: pointer;
-}
-
-.voiceButton {
-  background: $green;
-}
-
-.sendButton {
-  background: $red;
-}
-
 .graphCanvas {
   height: 460px;
   position: relative;
@@ -406,13 +466,6 @@ $page-bottom-gap: 8px;
 .graphNote h3 {
   font-size: 15px;
   line-height: 18px;
-}
-
-.graphNote p {
-  color: $muted;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 17px;
 }
 
 .checklist {

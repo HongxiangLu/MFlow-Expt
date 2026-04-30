@@ -1,14 +1,36 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import AppHeader from '../../components/app-header/app-header'
 import KnowledgeGraph from '../../components/knowledge-graph/knowledge-graph'
 import artifactMockUrl from '../../../mock/mock.jpg'
+import relatedArtifact1Url from './related-assets/mock1-thumb.jpg'
+import relatedArtifact2Url from './related-assets/mock2-thumb.jpg'
+import relatedArtifact3Url from './related-assets/mock3-thumb.jpg'
+import relatedArtifact4Url from './related-assets/mock4-thumb.jpg'
+import relatedArtifact5Url from './related-assets/mock5-thumb.jpg'
+import relatedArtifact6Url from './related-assets/mock6-thumb.jpg'
+import relatedArtifact7Url from './related-assets/mock7-thumb.jpg'
+import relatedArtifact8Url from './related-assets/mock8-thumb.jpg'
+import relatedArtifact9Url from './related-assets/mock9-thumb.jpg'
 import styles from './dashboarad.module.scss'
 
-const entries = [
-  { title: '青铜器纹饰', tone: 'green' },
-  { title: '商代礼制', tone: 'red' },
-  { title: '殷墟考古', tone: 'blue' },
-  { title: '展签文案生成', tone: 'gold' },
+const artifactFacts = [
+  { label: '时代', value: '宋' },
+  { label: '类别', value: '雕版' },
+  { label: '材质', value: '纸' },
+  { label: '外观形式', value: '线装' },
+  { label: '工艺', value: '雕版印刷' },
+  { label: '主题', value: '诗文' },
+]
+const relatedArtifacts = [
+  relatedArtifact1Url,
+  relatedArtifact2Url,
+  relatedArtifact3Url,
+  relatedArtifact4Url,
+  relatedArtifact5Url,
+  relatedArtifact6Url,
+  relatedArtifact7Url,
+  relatedArtifact8Url,
+  relatedArtifact9Url,
 ]
 const prompts = [
   '帮我查找商代青铜礼器中的兽面纹',
@@ -28,34 +50,21 @@ function classNames(...names: Array<string | false | undefined>) {
 
 function Chip({
   children,
-  active = false,
-  warning = false,
-  className,
   onClick,
 }: {
   children: string
-  active?: boolean
-  warning?: boolean
-  className?: string
   onClick?: () => void
 }) {
-  const chipClassName = classNames(
-    styles.chip,
-    active && styles.chipActive,
-    warning && styles.chipWarning,
-    className,
-  )
-
   if (onClick) {
     return (
-      <button className={chipClassName} type="button" onClick={onClick}>
+      <button className={styles.chip} type="button" onClick={onClick}>
         {children}
       </button>
     )
   }
 
   return (
-    <span className={chipClassName}>
+    <span className={styles.chip}>
       {children}
     </span>
   )
@@ -67,6 +76,24 @@ function Dot({ tone }: { tone: string }) {
 
 export default function MuseumAiPage() {
   const [query, setQuery] = useState('')
+  const relatedListRef = useRef<HTMLDivElement>(null)
+
+  function scrollRelatedArtifacts(direction: -1 | 1) {
+    const list = relatedListRef.current
+    if (!list) {
+      return
+    }
+
+    const firstItem = list.querySelector('button')
+    const listStyle = window.getComputedStyle(list)
+    const gap = Number.parseFloat(listStyle.columnGap || listStyle.gap) || 0
+    const itemWidth = firstItem?.getBoundingClientRect().width ?? 0
+
+    list.scrollBy({
+      left: direction * (itemWidth + gap) * 2,
+      behavior: 'smooth',
+    })
+  }
 
   return (
     <main className={styles.page}>
@@ -75,20 +102,64 @@ export default function MuseumAiPage() {
         <aside className={classNames(styles.panel, styles.leftPanel)}>
           <h2>文物信息</h2>
           <div className={styles.artifactPlaceholder}>
-            <img src={artifactMockUrl} alt="研究对象文物" />
-          </div>
+            <div className={styles.artifactImageFrame}>
+              <img src={artifactMockUrl} alt="杜工部草堂诗笺" decoding="async" />
+            </div>
+            <div className={styles.artifactInfo}>
+              <div className={styles.artifactTitleBlock}>
+                <h3>杜工部草堂诗笺</h3>
+                <p>宋代重要杜诗注本 · 孤本</p>
+              </div>
 
-          <h3>热门研究入口</h3>
-          <div className={styles.entryList}>
-            {entries.map((entry) => (
-              <button className={styles.entryRow} type="button" key={entry.title}>
-                <Dot tone={entry.tone} />
-                <span>
-                  <strong>{entry.title}</strong>
-                  <small>点击填入搜索关键词</small>
-                </span>
-              </button>
-            ))}
+              <dl className={styles.artifactFacts}>
+                {artifactFacts.map((fact) => (
+                  <div className={styles.artifactFact} key={fact.label}>
+                    <dt>{fact.label}</dt>
+                    <dd>{fact.value}</dd>
+                  </div>
+                ))}
+              </dl>
+
+              <section className={styles.artifactIntro}>
+                <p>
+                  《杜工部草堂诗笺》五十卷，以编年集注的形式笺注杜甫诗歌，是宋代最重要的杜诗注本之一。此本无《诗笺》正文，所存五卷为宋祁撰《传叙碑铭》一卷、赵子栎与鲁訔撰《年谱》二卷、蔡梦弼辑《诗话》二卷，系孤本。季振宜等旧藏。
+                </p>
+              </section>
+
+              <section className={styles.relatedArtifacts} aria-label="相关文物">
+                <div className={styles.relatedArtifactHeader}>
+                  <h3>相关文物</h3>
+                  <div className={styles.relatedArtifactControls}>
+                    <button
+                      type="button"
+                      aria-label="向左查看更多相关文物"
+                      onClick={() => scrollRelatedArtifacts(-1)}
+                    >
+                      &lt;
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="向右查看更多相关文物"
+                      onClick={() => scrollRelatedArtifacts(1)}
+                    >
+                      &gt;
+                    </button>
+                  </div>
+                </div>
+                <div className={styles.relatedArtifactList} ref={relatedListRef}>
+                  {relatedArtifacts.map((artifactUrl, index) => (
+                    <button className={styles.relatedArtifactCard} type="button" key={artifactUrl}>
+                      <img
+                        src={artifactUrl}
+                        alt={`相关文物 ${index + 1}`}
+                        decoding="async"
+                        loading="lazy"
+                      />
+                    </button>
+                  ))}
+                </div>
+              </section>
+            </div>
           </div>
         </aside>
 
@@ -139,7 +210,6 @@ export default function MuseumAiPage() {
           <header className={styles.panelHeader}>
             <div>
               <h2>Graph 关系图谱</h2>
-              <p>搜索或提问后自动生成</p>
             </div>
           </header>
 
