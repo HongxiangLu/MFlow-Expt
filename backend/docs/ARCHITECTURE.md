@@ -1,6 +1,6 @@
 # M-Flow RAG 后端系统架构设计文档 (MVP/Demo 阶段)
 
-**文档版本**: v1.1
+**文档版本**: v1.4
 **更新日期**: 2026-04-30
 **设计原则**: 最简可行产品 (MVP)，极简设计，高内聚低耦合
 
@@ -14,8 +14,10 @@
 *   **API 设计风格**: RESTful — 所有接口以资源为中心，通过标准 HTTP 动词映射操作语义。RESTful 是当前工业界最广泛采用的 API 范式，与 FastAPI 的路由系统、Pydantic 校验层及 Swagger 文档深度契合。
 *   **大语言模型集成**: 直接使用官方 `openai` Python 包，通过修改 `base_url` 接入 MiniMax-M2.7，实现最简 API 调用。之所以复用 OpenAI SDK 而非 MiniMax 专属 SDK，是为了将模型供应商锁定风险降至最低——未来切换模型时只需修改 `base_url` 与 `api_key`，业务代码无需变动。
 *   **RAG 引擎 (M-Flow)**: 作为本地 Python 库（Library）直接 `import` 并在当前进程中调用，不作为独立的微服务运行。此决策的理由是：MVP 阶段为单机部署，进程内调用可消除网络序列化与反序列化开销，同时避免引入服务编排（Docker Compose / K8s）的运维复杂度。
-*   **数据库与 ORM**: SQLite + **SQLAlchemy**。SQLite 作为嵌入式数据库可零配置启动，适合 MVP 阶段的快速验证；SQLAlchemy 作为业界标准的 ORM 框架，其数据库抽象层保障了未来向 MySQL/PostgreSQL 的平滑迁移，核心业务代码无需修改。
-*   **接口并发与解耦策略**: 针对前端并发请求的 `/api/chat` 和 `/api/graph/query`，后端采用**彻底解耦 (方案 A)**。两个接口各自独立维护完整的处理链路（包括各自独立的 Query Rewrite 步骤），互不干涉。此举牺牲了少量的 Token 成本，但最大化了代码的稳定性和简单性，避免了复杂的并发状态锁问题，符合 MVP 阶段"稳定性优先于成本优化"的工程策略。
+*   **数据库与 ORM**: SQLite + **SQLAlchemy (异步模式)** + **aiosqlite**。SQLite 作为嵌入式数据库可零配置启动，适合 MVP 阶段的快速验证；SQLAlchemy 作为业界标准的 ORM 框架，其数据库抽象层保障了未来向 MySQL/PostgreSQL 的平滑迁移，核心业务代码无需修改。采用 `aiosqlite` 异步驱动而非同步 `sqlite3`，原因见下方「异步策略」。数据库初始化时默认启用 **WAL 模式**（`PRAGMA journal_mode=WAL`），使得读写操作可以并发执行（读不阻塞写、写不阻塞读），避免前端并发调用 `/api/chat`（写入）和 `/api/graph/query`（读取）时触发 `database is locked` 错误。
+*   **异步策略**: 全链路采用 **`async def` 路由 + `aiosqlite` 异步数据库驱动**。选择此组合的原因是：(1) Chat 接口的 SSE 流式推送（`StreamingResponse` + 异步生成器）和 LLM 调用（`AsyncOpenAI` 的异步迭代器）都强依赖 `async def` 路由；(2) 一旦使用 `async def`，同步数据库调用会阻塞事件循环，冻结所有并发请求，因此必须配合异步数据库驱动；(3) `aiosqlite` 内部使用独立线程执行 SQLite 操作并通过 async/await 暴露给事件循环，在等待 SQLite 文件锁释放时不阻塞其他协程；(4) 未来迁移 PostgreSQL 时，只需更换 `create_async_engine` 的 URL 和驱动（如 `asyncpg`），`AsyncSession` 的业务代码无需改动。
+*   **配置管理**: 采用**单个 `.env` 文件**统一存放所有配置（通过注释分区区分 M-Flow 配置与后端配置）。后端自身的配置通过 **`pydantic-settings`** 的 `BaseSettings` 类管理，M-Flow 继续通过 `python-dotenv` 的 `load_dotenv()` 读取同一文件。之所以后端使用 `pydantic-settings` 而非 `python-dotenv`，是因为：(1) 它提供强类型校验，字段声明为 `int`/`bool`/`str` 后自动转换，启动时即报错而非运行时崩溃；(2) 所有配置集中在一个 `Settings` 类中，具备完整的 IDE 类型提示与自动补全；(3) 这是 FastAPI 官方文档推荐的配置管理最佳实践。之所以不拆分为多个 `.env` 文件，是因为：`BaseSettings` 默认读取 `.env`，与 M-Flow 的 `load_dotenv()` 行为完全兼容，单文件更简单且避免了多文件间同步配置的风险。
+*   **Query Rewrite 策略**: Query Rewrite **仅用于图谱查询接口** (`/api/graph/query`)。对话接口 (`/api/chat`) 不执行 Query Rewrite，因为对话接口会将完整的多轮历史连同当前提问一起发送给 LLM，模型本身具备从上下文中理解指代关系的能力。两个接口彻底解耦，互不干涉。
 
 ---
 
@@ -32,18 +34,18 @@ backend/
 │   └── graph.py             # POST /api/graph/query 图谱数据接口
 ├── core/                    # 全局单例与外部客户端初始化
 │   ├── __init__.py
-│   ├── config.py            # 读取 .env 环境变量
+│   ├── config.py            # pydantic-settings BaseSettings 配置类（读取 .env 中的后端配置）
 │   └── llm.py               # 实例化基于 openai 包的 MiniMax 客户端单例
 ├── db/                      # 数据库与持久化层
 │   ├── __init__.py
-│   ├── database.py          # SQLAlchemy 引擎 (Engine) 与会话工厂 (SessionLocal)
+│   ├── database.py          # SQLAlchemy 异步引擎 (AsyncEngine)、异步会话工厂 (async_session)、WAL 模式初始化
 │   └── models.py            # 数据表结构 (Session, Message 实体定义)
 ├── schemas/                 # Pydantic 数据校验模型 (DTO)
 │   ├── __init__.py
 │   └── payloads.py          # 存放所有的 Request/Response 模型定义 (极简合并为一)
 ├── services/                # 业务逻辑服务
 │   ├── __init__.py
-│   ├── chat_service.py      # 对话全链路逻辑 (重写 -> 检索 -> 组装 -> 推流 -> 落盘)
+│   ├── chat_service.py      # 对话全链路逻辑 (检索 -> 组装 -> 推流 -> 落盘)
 │   ├── graph_service.py     # 图谱全链路逻辑 (重写 -> 检索 -> 格式化)
 │   └── mflow_client.py      # M-Flow 本地库的调用封装门面 (Facade)
 ├── requirements.txt         # 核心依赖清单 (fastapi, uvicorn, sqlalchemy, openai 等)
@@ -56,20 +58,19 @@ backend/
 ## 3. 核心模块详细说明
 
 ### 3.1 路由层 (`api/`)
-*   本层仅做"请求接收"与"响应打包"，**禁止**在此编写复杂的业务逻辑。这样做的原因是：将 HTTP 协议细节（参数校验、状态码、SSE 封装）与业务规则（Query Rewrite、RAG 检索、Prompt 组装）解耦，使业务逻辑可在脱离 HTTP 上下文的情况下独立测试和复用。
-*   依赖注入：通过 FastAPI 的 `Depends` 机制，在此处注入数据库 Session，然后将其传递给 Service 层。使用依赖注入而非全局变量的原因是：确保每个请求持有独立的数据库连接生命周期，避免并发请求间的连接泄漏或状态污染。
+*   所有路由函数统一使用 **`async def`** 声明。本层仅做"请求接收"与"响应打包"，**禁止**在此编写复杂的业务逻辑。这样做的原因是：将 HTTP 协议细节（参数校验、状态码、SSE 封装）与业务规则（RAG 检索、Prompt 组装）解耦，使业务逻辑可在脱离 HTTP 上下文的情况下独立测试和复用。
+*   依赖注入：通过 FastAPI 的 `Depends` 机制，在此处注入异步数据库 Session（`AsyncSession`），然后将其传递给 Service 层。使用依赖注入而非全局变量的原因是：确保每个请求持有独立的数据库连接生命周期，避免并发请求间的连接泄漏或状态污染。
 
 ### 3.2 业务逻辑层 (`services/`)
 这是系统的核心，所有 RAG 链路的编排逻辑集中于此。
-*   **`chat_service.py`**: 负责处理流式对话接口。它依次执行：
-    1. 通过 SQLAlchemy 查询对应 `session_id` 的近期历史消息。
-    2. 调用 LLM 进行 Query Rewrite (使其成为独立语义)。
-    3. 将独立 Query 传给 `mflow_client` 获取文档上下文 (Context)。
-    4. 组装 Prompt，调用 LLM 获取 SSE 流式响应。
-    5. 异步/同步将用户问题和完整回答持久化到数据库。
-*   **`graph_service.py`**: 负责处理知识图谱渲染接口。链路与 Chat 类似但**互相独立**（各自执行 Query Rewrite），两者解耦的原因详见第 1 节的"接口并发与解耦策略"。
-    1. 查询近期历史（用于重写）。
-    2. 调用 LLM 进行 Query Rewrite。
+*   **`chat_service.py`**: 负责处理流式对话接口。**不执行 Query Rewrite**，因为完整的对话历史会随 Prompt 一起发送给 LLM。它依次执行：
+    1. 通过 SQLAlchemy 查询对应 `session_id` 的全部历史消息（不设轮数与 Token 上限）。
+    2. 将用户原始 Query 传给 `mflow_client` 获取文档上下文 (Context)。
+    3. 组装 Prompt（Context + History + Query + System Prompt），调用 LLM 获取 SSE 流式响应。System Prompt 中需限定模型的回答风格，具体模板在代码实现阶段给出，总体原则是让大模型尽可能命中缓存。
+    4. 异步将用户问题和完整回答持久化到数据库（通过 `AsyncSession`）。
+*   **`graph_service.py`**: 负责处理知识图谱渲染接口。**独立执行 Query Rewrite**，与 Chat 接口彻底解耦。
+    1. 查询全部历史（用于重写）。
+    2. **跳过策略**：首先由后端代码判定 session 内是否有历史消息——若无历史（首轮对话）则跳过重写，直接使用原始 query；若有历史，则调用 LLM 进行 Query Rewrite（Prompt 中指示"如果当前提问语义已充分独立，则原样返回"），输出为**纯文本**。
     3. 将独立 Query 传给 `mflow_client`，专门请求图谱节点与边。
     4. 返回包含 `graphId`、`centerNodeId`、`nodes`、`edges` 的完整 Graph JSON。
 *   **`mflow_client.py`**: 适配器 / 门面（Facade）。将 M-Flow 本地库的具体 API 调用封装为语义清晰的函数（如 `get_context(query)`, `get_graph(query)`）。引入 Facade 层的原因是：隔离底层 SDK 的实现细节与版本变更风险，使上层 Service 代码不直接耦合于 M-Flow 的内部 API 签名。
@@ -112,5 +113,5 @@ client = AsyncOpenAI(
 2.  **数据模型确立**: 完成 `db/models.py` 与 `schemas/payloads.py`，确保请求参数能被校验，聊天记录能被存储。
 3.  **核心 Service 联调**: 编写 `mflow_client.py` (使用 Mock 数据模拟 M-Flow) 与 `core/llm.py` (连通真实的 MiniMax 接口测试 Query Rewrite)。
 4.  **接口与流式组装**: 完成 `chat_service.py` 和 `api/chat.py` 的 SSE 协议支持，实现完整的问答闭环。
-5.  **图谱接口闭环**: 完成独立、解耦的 `/api/graph/query` 接口。
+5.  **图谱接口闭环**: 完成独立、解耦的 `/api/graph/query` 接口（含 Query Rewrite 逻辑）。
 6.  **替换 M-Flow Mock**: 最终接入真实的 M-Flow 本地 SDK 逻辑。
