@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     # --- 后端 LLM ---
     MINIMAX_API_KEY: str
-    MINIMAX_BASE_URL: str = "https://api.minimax.chat/v1"
+    MINIMAX_BASE_URL: str = "https://api.minimax.io/v1"
     MINIMAX_MODEL: str = "MiniMax-M2.7"
 
     # --- 后端 DB ---
