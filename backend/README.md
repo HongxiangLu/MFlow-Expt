@@ -181,4 +181,36 @@ def _build_messages(self, user_input: str, system_prompt: str) -> list:
     ]
 ```
 
+# M-Flow 版本标识修正
+
+若需要执行 `mflow -ui` 启动内置可视化界面，由于底层包名变更及 GitHub 仓库所有者迁移，需要手动对环境中的 M-Flow 源代码进行以下两处修正：
+
+**1. 修正版本获取包名**
+
+*   **文件路径**：`项目环境路径\Lib\site-packages\m_flow\version.py`
+
+*   **修改点**：定位到第 30 行，将 `importlib.metadata.version` 的参数由旧包名改为新包名。
+
+```python
+# 修改前
+_CACHED = importlib.metadata.version("m_flow")
+
+# 修改后 (修正为正确的 pip 包名)
+_CACHED = importlib.metadata.version("mflow-ai")
+```
+
+**2. 修正 UI 静态资源下载地址**
+
+*   **文件路径**：`项目环境路径\Lib\site-packages\m_flow\api\v1\ui\ui.py`
+
+*   **修改点**：定位到第 110 行，更新 GitHub 仓库的所有者名称。
+
+```python
+# 修改前
+url = f"https://github.com/m-flow-project/m_flow/archive/refs/tags/v{clean}.zip"
+
+# 修改后 (更新仓库所有者为 FlowElement-ai)
+url = f"https://github.com/FlowElement-ai/m_flow/archive/refs/tags/v{clean}.zip"
+```
+
 > **注意配置细节**：在 `backend/.env` 中**无需**配置 `LLM_ENDPOINT` 以及 `LLM_PROVIDER=custom` 属性，否则会导致 litellm 路由退化为兼容模式，掩盖了原生路由（报 `MinimaxException`）触发的问题。配置前缀 `minimax/` 即足以让它自动定位官方地址（国际版：https://api.minimax.io/v1）。
