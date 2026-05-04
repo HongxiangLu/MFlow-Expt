@@ -24,60 +24,86 @@ STANDARD_NODE_TYPES = {
 
 async def get_context(query: str) -> list[str]:
     """
-    获取针对用户提问的文档上下文片段 (Document Context)
+    获取针对用户提问的文档上下文片段 (Document Context)。
     
-    调用 M-Flow 的查询接口获取相关的知识片段。此处使用 "episodic" (片段记忆) 模式。
+    调用底层的 M-Flow 检索引擎，获取相关的知识片段。
+    由于只需求纯文本，因此限定使用 "episodic" (片段记忆) 模式，以此降低检索延迟并节约资源。
     
     Args:
-        query (str): 用户的输入问题（可能经过了前置的 Query Rewrite 重写）。
+        query (str): 用户的输入问题（通常建议在传入前进行指代消解或 Query Rewrite 重写）。
         
     Returns:
-        list[str]: 相关的纯文本上下文片段列表。如果未匹配到内容，返回空列表。
+        list[str]: 包含相关知识点的纯文本片段列表。若无匹配内容，将安全地返回空列表。
+        
+    Raises:
+        Exception: 捕获到底层 M-Flow 或 LLM 抛出的网络与权限异常，需由上层路由统一处理。
     """
-    # 以 episodic 模式异步调用引擎，专注检索纯粹的段落上下文
-    result = await m_flow_query(query, mode="episodic")
+    # 不再使用有 Bug 的 m_flow_query，改用底层 m_flow_search 直接获取
+    search_results = await m_flow_search(
+        query_text=query,
+        query_type=RecallMode.EPISODIC,
+        use_combined_context=False
+    )
     
-    # 将返回的上下文对象强制转为字符串列表
-    if isinstance(result.context, list):
-        return [str(ctx) for ctx in result.context]
-    return []
-
+    context_list = []
+    if isinstance(search_results, list):
+        for r in search_results:
+            # 兼容 M-Flow 返回对象或字典的不同情况
+            if hasattr(r, "search_result"):
+                context_list.append(str(r.search_result))
+            elif isinstance(r, dict):
+                content = r.get("search_result") or r.get("context") or str(r)
+                context_list.append(str(content))
+            else:
+                context_list.append(str(r))
+    elif hasattr(search_results, "context"):
+        # 兼容返回 CombinedSearchResult 的情况
+        if isinstance(search_results.context, list):
+            context_list = [str(ctx) for ctx in search_results.context]
+        else:
+            context_list = [str(search_results.context)]
+            
+    return context_list
 async def get_graph(query: str) -> dict:
     """
-    获取与用户提问相关的知识图谱数据 (Knowledge Graph Data)
+    获取与用户提问相关的结构化知识图谱数据 (Knowledge Graph Data)。
     
-    调用 M-Flow 引擎进行 TRIPLET_COMPLETION 模式检索，
-    该模式不仅检索文本，还会召回构建知识关联的三元组 (节点和边)。
+    调用 M-Flow 引擎进行 TRIPLET_COMPLETION (三元组补全) 模式检索。
+    该模式除了传统的向量召回，还会触发基于图数据库（如 Kùzù）的连通子图提取。
     
-    此函数会提取检索结果中的图形(graphs)属性，并进行：
-    - 实体类型映射 (NodeType Mapping)
-    - 图谱摘要哈希生成 (Graph ID Generation)
-    - 中心节点选取 (Center Node Selection)
+    本函数作为适配层，执行以下核心业务逻辑转化：
+    1. 实体类型降级 (NodeType Mapping)：过滤无关数据，保障前端渲染安全。
+    2. 图谱哈希生成 (Graph ID Generation)：实现相同查询幂等性，便于前端缓存。
+    3. 中心节点选举 (Center Node Selection)：提供前端力导向图 (Force Graph) 的初始视点。
     
     Args:
-        query (str): 用户的输入问题（通常是消解过指代的独立语义句子）。
+        query (str): 用户输入的检索词（如实体名称或消解过指代的独立语义句子）。
         
     Returns:
-        dict: 符合 GraphResponse 契约的字典，包含：
-            - graphId (str): 基于 query 计算出的哈希值
-            - centerNodeId (str): 推荐作为前端中心点的节点 ID
-            - nodes (list[dict]): 格式化后的图谱节点列表
-            - edges (list[dict]): 格式化后的图谱边列表
+        dict: 符合前端 `GraphResponse` 契约的标准字典结构，包含：
+            - graphId (str): 基于 query 计算出的 SHA-256 前缀，用于唯一标识当前图谱视图。
+            - centerNodeId (str): 推荐作为前端视图聚焦点/高亮点的节点 ID。
+            - nodes (list[dict]): 经过样式安全过滤后的图谱节点列表。
+            - edges (list[dict]): 生成了全局唯一 ID 的图谱边列表。
+            
+    Raises:
+        Exception: 底层图谱查询失败时可能抛出的异常。
     """
     # 1. 调用 m_flow.search 获取带图形结构的聚合结果
     search_result = await m_flow_search(
         query_text=query,
         query_type=RecallMode.TRIPLET_COMPLETION,
-        verbose=True  # 必须开启 verbose 才能带回 graphs 对象
+        verbose=True,  # 必须开启 verbose 才能带回 graphs 对象
+        use_combined_context=True  # 必须开启组合上下文才能返回带有 graphs 的 CombinedSearchResult
     )
 
     nodes = []
     edges = []
     
-    # 解析并提取 graphs 属性
-    # search_result.graphs 是一个字典，格式如: {"all available datasets": {"nodes": [...], "edges": [...]}}
-    if search_result.graphs:
-        for dataset_name, graph_data in search_result.graphs.items():
+    # 解析并提取 graphs 属性（需兼容防御：确保 search_result 有 graphs 属性）
+    graphs_data = getattr(search_result, "graphs", None)
+    if graphs_data:
+        for dataset_name, graph_data in graphs_data.items():
             if not isinstance(graph_data, dict):
                 continue
                 

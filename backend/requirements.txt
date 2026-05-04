@@ -1,2 +1,2 @@
 # uv
-mflow-ai
+mflow-ai==0.3.4

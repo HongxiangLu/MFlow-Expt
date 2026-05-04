@@ -32,7 +32,10 @@ async def main() -> None:
     # - 批量文件：传入路径列表（如 data=["file1.txt", "file2.docx"]）。
     # - 网络爬取：传入 URL（如 data="https://example.com/article"）。
     # sample_text = "司母戊鼎，又称后母戊大方鼎，是商代晚期的一件青铜礼器，出土于河南安阳殷墟。"
-    sample_text = 'file.md'
+
+    # M-Flow 内部的 Path.cwd() 指向当前工作目录，容易找不到文件
+    # 此处使用绝对路径更加保险
+    sample_text = os.path.abspath(os.path.join(os.path.dirname(__file__), 'file.md'))
     
     # 目标数据集名称，系统会自动为其分配或关联 UUID
     dataset_name = "artifacts_1"
