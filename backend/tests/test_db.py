@@ -11,7 +11,7 @@ import os
 # 环境路径配置
 # =================================================================
 # 将项目根目录加入到 sys.path，确保在脚本运行模式下能正确导入 db 和 core 模块
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from db.database import engine, async_session
 from db.models import Base, ChatSession
