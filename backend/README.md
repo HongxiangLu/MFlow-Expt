@@ -6,10 +6,6 @@
 
 ```
 <type>(<scope>): <description>
-
-[optional body]
-
-[optional footer(s)]
 ```
 
 ## 提交类型 (Type)
@@ -97,7 +93,8 @@ ENTITY TYPES (choose one):
 找到定义 `NODE GUIDELINES` 的段落，并使用以下内容将其覆盖：
 
 ```text
-1. Types — assign each node a broad category label: artifact, dynasty, material, category, pattern, site, craft, inscription, usage, concept, person, collection, other.
+1. Types — assign each node a broad category label:
+   artifact, dynasty, material, category, pattern, site, craft, inscription, usage, concept, person, collection, other.
 ```
 
 ## 关系 (Edge) 的构建逻辑
@@ -130,3 +127,58 @@ M-Flow 支持直接跳过生成步骤获取上下文，其底层提供了以下�
 2. **业务系统的流式 RAG 实现**：在开发过程中，如果需要实现打字机效果的响应，推荐采用 **“解耦调用”** 的工程策略：
    * **第一步：检索**。调用 `m_flow.search()` 获取单纯的图谱/文本上下文。
    * **第二步：生成**。将获取的上下文直接组装至业务后端的 Prompt 中，交由标准的 LLM 客户端库（如 `AsyncOpenAI`）开启 `stream=True` 进行流式推理，最后经由 SSE 协议推送给前端。
+
+# M-Flow 兼容性：MiniMax 的 System 角色限制
+
+在使用 MiniMax 模型接入 M-Flow 进行图谱构建（如调用 `memorize()`）时，可能会遇到如下异常导致流程阻断：
+`litellm.BadRequestError: OpenAIException - invalid params, chat content has invalid message role: system (2013)`
+
+## 报错原因
+
+这源于底层的格式严格校验：
+
+1. **M-Flow 硬编码 System**：M-Flow 内部核心层在发送提取指令时，在代码中硬编码了包含 `system` 角色的 `messages` 数组。
+2. **Litellm 路由**：作为中间件的 `litellm`，即使在 `.env` 中配置了原生的 `LLM_MODEL=minimax/MiniMax-M2.7`，其负责处理的 `MinimaxChatConfig`（继承自 `OpenAIGPTConfig`）也未对 `system` 角色做降级或合并处理。
+3. **MiniMax 严格校验**：MiniMax 平台接口对于传入的 Role 字段有着极其严格的物理校验，直接拒绝并抛弃带有 `system` 标识的任何请求结构体。
+
+## 解决方案
+
+修改环境内的 M-Flow 源代码，人为将 `system` 指令前置拼接并降级合并为 `user` 角色。需要修改以下三个底层文件：
+
+**文件 1：`项目环境路径\Lib\site-packages\m_flow\llm\LLMGateway.py`**
+
+定位到 `complete_text` 方法中构建 `messages` 的位置（第 144 行）：
+
+```python
+# 修改前
+messages = [
+    {"role": "system", "content": instructions},
+    {"role": "user", "content": source_text},
+]
+
+# 修改后 (将 system 内容合并至 user 顶部)
+messages = [
+    {"role": "user", "content": instructions + "\n\n" + source_text},
+]
+```
+
+**文件 2：`项目环境路径\Lib\site-packages\m_flow\llm\backends\litellm_instructor\llm\openai\adapter.py`**
+
+定位到 `_build_messages` 方法（第 211 行）：
+
+```python
+# 修改前
+def _build_messages(self, user_input: str, system_prompt: str) -> list:
+    return [
+        {"role": "user", "content": user_input},
+        {"role": "system", "content": system_prompt},
+    ]
+
+# 修改后 (同样进行指令前置合并)
+def _build_messages(self, user_input: str, system_prompt: str) -> list:
+    return [
+        {"role": "user", "content": system_prompt + "\n\n" + user_input},
+    ]
+```
+
+> **注意配置细节**：在 `backend/.env` 中**无需**配置 `LLM_ENDPOINT` 以及 `LLM_PROVIDER=custom` 属性，否则会导致 litellm 路由退化为兼容模式，掩盖了原生路由（报 `MinimaxException`）触发的问题。配置前缀 `minimax/` 即足以让它自动定位官方地址（国际版：https://api.minimax.io/v1）。
