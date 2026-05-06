@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { UndirectedGraph } from 'graphology'
 import forceAtlas2 from 'graphology-layout-forceatlas2'
 import Sigma from 'sigma'
+import { Maximize2 } from 'lucide-react'
 
 import styles from './knowledge-graph.module.scss'
 
@@ -21,40 +22,60 @@ type EdgeAttributes = {
 }
 
 const nodes: Array<[string, Omit<NodeAttributes, 'x' | 'y'>]> = [
-  ['simuwu-ding', { label: '司母戊鼎', size: 17, color: '#8c211a' }],
-  ['shang', { label: '商代', size: 12, color: '#b88538' }],
-  ['bronze', { label: '青铜器', size: 13, color: '#0d6157' }],
-  ['taotie', { label: '兽面纹', size: 11, color: '#2d5f83' }],
-  ['ritual', { label: '祭祀礼器', size: 11, color: '#736657' }],
-  ['yinxu', { label: '殷墟', size: 10, color: '#2d5f83' }],
-  ['casting', { label: '范铸法', size: 10, color: '#0d6157' }],
-  ['inscription', { label: '铭文', size: 10, color: '#b88538' }],
+  ['jiaboyi', { label: '贾宝彝', size: 18, color: '#d4af37' }],
+  ['western-zhou', { label: '西周早期', size: 13, color: '#b8873a' }],
+  ['bronze', { label: '青铜', size: 13, color: '#0f766e' }],
+  ['ritual-vessel', { label: '青铜礼器', size: 12, color: '#7f4f24' }],
+  ['beast-mask', { label: '兽面纹', size: 11, color: '#2d5f83' }],
+  ['thunder-pattern', { label: '云雷纹', size: 10, color: '#355f4a' }],
+  ['inscription', { label: '铭文', size: 11, color: '#9a6b2f' }],
+  ['changsha', { label: '湖南长沙', size: 10, color: '#256d85' }],
+  ['casting', { label: '铸造工艺', size: 10, color: '#0d6157' }],
+  ['ritual-system', { label: '礼制祭祀', size: 11, color: '#6a5a3c' }],
+  ['size', { label: '通高28.5cm', size: 9, color: '#71717b' }],
+]
+
+const edges: Array<[string, string, string, string, number]> = [
+  ['jiaboyi', 'western-zhou', '所属年代', 'e1', 1.2],
+  ['jiaboyi', 'bronze', '主要材质', 'e2', 1.5],
+  ['jiaboyi', 'ritual-vessel', '器物类型', 'e3', 1.3],
+  ['jiaboyi', 'beast-mask', '包含纹饰', 'e4', 1.1],
+  ['jiaboyi', 'inscription', '铭文证据', 'e5', 1],
+  ['jiaboyi', 'changsha', '出土地点', 'e6', 0.9],
+  ['jiaboyi', 'size', '尺寸', 'e7', 0.7],
+  ['bronze', 'casting', '制作工艺', 'e8', 1],
+  ['bronze', 'ritual-vessel', '礼器材质', 'e9', 0.9],
+  ['ritual-vessel', 'ritual-system', '使用场景', 'e10', 1.1],
+  ['beast-mask', 'ritual-system', '象征关系', 'e11', 0.9],
+  ['beast-mask', 'thunder-pattern', '纹饰组合', 'e12', 0.8],
+  ['inscription', 'western-zhou', '断代依据', 'e13', 0.7],
+  ['casting', 'western-zhou', '时代工艺', 'e14', 0.7],
 ]
 
 const focusedCameraRatio = 0.55
 
-const edges: Array<[string, string, string, string, number]> = [
-  ['simuwu-ding', 'shang', '所属年代', 'e1', 1.2],
-  ['simuwu-ding', 'bronze', '器物类别', 'e2', 1.5],
-  ['simuwu-ding', 'taotie', '包含纹饰', 'e3', 1],
-  ['simuwu-ding', 'ritual', '主要用途', 'e4', 1.1],
-  ['simuwu-ding', 'yinxu', '出土地关联', 'e5', 0.9],
-  ['bronze', 'casting', '制作工艺', 'e6', 0.8],
-  ['bronze', 'inscription', '常见证据', 'e7', 0.7],
-  ['shang', 'ritual', '礼制背景', 'e8', 0.9],
-  ['taotie', 'ritual', '象征关系', 'e9', 0.7],
-]
-
 function buildGraph() {
   const graph = new UndirectedGraph<NodeAttributes, EdgeAttributes>()
-  const radius = 8
+  const seedPositions: Record<string, { x: number; y: number }> = {
+    jiaboyi: { x: 0, y: 0 },
+    'western-zhou': { x: -3.2, y: -5.6 },
+    bronze: { x: 4.7, y: -3.5 },
+    'ritual-vessel': { x: 6.5, y: 1.2 },
+    'beast-mask': { x: 2.8, y: 5.4 },
+    'thunder-pattern': { x: 6.9, y: 6.2 },
+    inscription: { x: -2.2, y: 5.9 },
+    changsha: { x: -6.4, y: 2.4 },
+    casting: { x: 7.8, y: -6.1 },
+    'ritual-system': { x: -5.9, y: -2.8 },
+    size: { x: -8.1, y: 6.5 },
+  }
 
   nodes.forEach(([key, attributes], index) => {
-    const angle = (index / nodes.length) * Math.PI * 2
+    const seed = seedPositions[key]
     graph.addNode(key, {
       ...attributes,
-      x: Math.cos(angle) * radius,
-      y: Math.sin(angle) * radius,
+      x: seed?.x ?? Math.cos(index) * 7,
+      y: seed?.y ?? Math.sin(index) * 7,
     })
   })
 
@@ -62,8 +83,8 @@ function buildGraph() {
     graph.addEdgeWithKey(key, source, target, {
       label,
       weight,
-      size: weight * 2.6,
-      color: '#ffffff',
+      size: weight * 1.5,
+      color: 'rgba(106, 90, 60, 0.78)',
     })
   })
 
@@ -71,9 +92,9 @@ function buildGraph() {
     iterations: 160,
     settings: {
       gravity: 1.2,
-      scalingRatio: 6,
+      scalingRatio: 5.5,
       slowDown: 6,
-      edgeWeightInfluence: 0.8,
+      edgeWeightInfluence: 0.85,
     },
   })
 
@@ -95,31 +116,31 @@ export default function KnowledgeGraph() {
       allowInvalidContainer: true,
       autoCenter: true,
       autoRescale: true,
-      defaultEdgeColor: '#ffffff',
+      defaultEdgeColor: 'rgba(106, 90, 60, 0.76)',
       defaultEdgeType: 'line',
-      edgeLabelColor: { color: '#736657' },
-      edgeLabelSize: 9,
-      edgeLabelWeight: '600',
-      labelColor: { color: '#1a1714' },
-      labelDensity: 0.12,
+      edgeLabelColor: { color: '#8d7a55' },
+      edgeLabelSize: 8,
+      edgeLabelWeight: '500',
+      labelColor: { color: '#d4d4d8' },
+      labelDensity: 0.25,
       labelFont: 'Inter, "Noto Sans SC", "Microsoft YaHei", sans-serif',
-      labelRenderedSizeThreshold: 7,
+      labelRenderedSizeThreshold: 6,
       labelSize: 11,
-      labelWeight: '700',
-      renderEdgeLabels: true,
+      labelWeight: '500',
+      renderEdgeLabels: false,
       renderLabels: true,
-      stagePadding: 24,
+      stagePadding: 38,
     })
     const minimapRenderer = new Sigma(graph, minimapRef.current, {
       allowInvalidContainer: true,
       autoCenter: true,
       autoRescale: true,
-      defaultEdgeColor: '#d8cfc1',
+      defaultEdgeColor: 'rgba(106, 90, 60, 0.72)',
       defaultEdgeType: 'line',
       edgeReducer: (_, attributes) => ({
         ...attributes,
-        color: 'rgba(115, 102, 87, 0.78)',
-        size: 1.2,
+        color: 'rgba(106, 90, 60, 0.65)',
+        size: 0.8,
       }),
       enableCameraPanning: false,
       enableCameraRotation: false,
@@ -127,7 +148,7 @@ export default function KnowledgeGraph() {
       labelDensity: 0,
       renderEdgeLabels: false,
       renderLabels: false,
-      stagePadding: 20,
+      stagePadding: 16,
     })
     const minimapContainer = minimapContainerRef.current
     let isDraggingMinimap = false
@@ -296,14 +317,14 @@ export default function KnowledgeGraph() {
 
   return (
     <div className={styles.graph} ref={graphRef}>
-      <div className={styles.graphStage} ref={containerRef} aria-label="文物关系图谱模拟数据" />
+      <div className={styles.graphStage} ref={containerRef} aria-label="贾宝彝知识图谱 Sigma 画布" />
       <button
         className={styles.fullscreenButton}
         type="button"
         aria-label="切换关系图谱全屏"
         onClick={toggleFullscreen}
       >
-        ⛶
+        <Maximize2 size={16} />
       </button>
       <div className={styles.minimap} ref={minimapContainerRef} aria-label="拖拽移动小地图位置">
         <div className={styles.minimapStage} ref={minimapRef} />

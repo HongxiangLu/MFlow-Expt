@@ -1,0 +1,22 @@
+data: {"chunk": "您现在选中的这部《杜工部草堂诗笺》，可是展厅里非常重量级的文化瑰宝。", "finish_reason": null}
+
+data: {"chunk": "\n\n简单来说，这是唐代“诗圣”杜甫（因曾任检校工部员外郎，世称杜工部）的诗集注本。", "finish_reason": null}
+
+data: {"chunk": "当年杜甫流寓成都，在浣花溪畔筑建草堂，写下了大量忧国忧民的不朽诗篇。", "finish_reason": null}
+
+data: {"chunk": "这部典籍不仅原汁原味地收录了他的传世名作，还汇集了历代（尤其是宋代）学者精细的考订与笺注，", "finish_reason": null}
+
+data: {"chunk": "是我们读懂杜诗“诗史”底蕴最重要的一把钥匙。", "finish_reason": null}
+
+data: {"chunk": "\n\n您可以凑近仔细看看展柜里的古籍。", "finish_reason": null}
+
+data: {"chunk": "目前存世的《杜工部草堂诗笺》多为极其珍贵的宋代刻本，距今已有八百多年历史。", "finish_reason": null}
+
+data: {"chunk": "它的版面疏朗大气，刻字古拙挺拔，纸张和墨色都完美展现了宋代雕版印刷巅峰时期的技艺。", "finish_reason": null}
+
+data: {"chunk": "它不仅是一部文学与历史的百科全书，本身也是一件跨越千年的精美艺术品。", "finish_reason": null}
+
+data: {"chunk": "透过这些泛黄斑驳的纸页，我们仿佛能真正触摸到那个时代的文化温度与诗圣的深沉情怀。", "finish_reason": null}
+
+data: {"chunk": "", "finish_reason": "stop"}
+

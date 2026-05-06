@@ -1,212 +1,239 @@
-import { useRef, useState } from 'react'
-import AppHeader from '../../components/app-header/app-header'
+import { useState } from 'react'
+import {
+  Archive,
+  AudioLines,
+  BookOpen,
+  Box,
+  Expand,
+  Map,
+  Menu,
+  MessageSquare,
+  Search,
+  Send,
+  Sparkles,
+  UserRound,
+  X,
+} from 'lucide-react'
 import KnowledgeGraph from '../../components/knowledge-graph/knowledge-graph'
-import artifactMockUrl from '../../../mock/mock.jpg'
-import relatedArtifact1Url from './related-assets/mock1-thumb.jpg'
-import relatedArtifact2Url from './related-assets/mock2-thumb.jpg'
-import relatedArtifact3Url from './related-assets/mock3-thumb.jpg'
-import relatedArtifact4Url from './related-assets/mock4-thumb.jpg'
-import relatedArtifact5Url from './related-assets/mock5-thumb.jpg'
-import relatedArtifact6Url from './related-assets/mock6-thumb.jpg'
-import relatedArtifact7Url from './related-assets/mock7-thumb.jpg'
-import relatedArtifact8Url from './related-assets/mock8-thumb.jpg'
-import relatedArtifact9Url from './related-assets/mock9-thumb.jpg'
+import mockjpg from '../../../mock/mock.jpg'
 import styles from './dashboarad.module.scss'
 
 const artifactFacts = [
-  { label: '时代', value: '宋' },
-  { label: '类别', value: '雕版' },
-  { label: '材质', value: '纸' },
-  { label: '外观形式', value: '线装' },
-  { label: '工艺', value: '雕版印刷' },
-  { label: '主题', value: '诗文' },
+  { label: '文物编号', value: 'HNM-2024-0156' },
+  { label: '年代', value: '西周早期 (约公元前1046-前977)' },
+  { label: '材质', value: '青铜 (铜锡合金)' },
+  { label: '尺寸', value: '通高28.5cm, 口径22.4cm' },
+  { label: '重量', value: '2.85 kg' },
+  { label: '出土地点', value: '湖南省长沙市' },
+  { label: '收藏单位', value: '湖南博物院' },
 ]
-const relatedArtifacts = [
-  relatedArtifact1Url,
-  relatedArtifact2Url,
-  relatedArtifact3Url,
-  relatedArtifact4Url,
-  relatedArtifact5Url,
-  relatedArtifact6Url,
-  relatedArtifact7Url,
-  relatedArtifact8Url,
-  relatedArtifact9Url,
-]
+
 const prompts = [
-  '帮我查找商代青铜礼器中的兽面纹',
-  '我想了解殷墟出土文物和祭祀制度',
-  '生成一段适合展厅观众阅读的文物说明',
+  '该文物是属于西周早期的吗？',
+  '该文物的材质和铸造工艺有什么特点？',
+  '可不可以根据其纹饰推测当时的社会信仰?',
+  '铭文的内容主要记载了什么事件？',
 ]
-const recentTopics = ['青铜器', '陶俑', '丝路文物']
-function classNames(...names: Array<string | false | undefined>) {
-  return names.filter(Boolean).join(' ')
-}
 
-function Chip({
-  children,
-  onClick,
-}: {
-  children: string
-  onClick?: () => void
-}) {
-  if (onClick) {
-    return (
-      <button className={styles.chip} type="button" onClick={onClick}>
-        {children}
-      </button>
-    )
-  }
+const navItems = [
+  { label: '藏品', icon: Archive },
+  { label: '检索', icon: Search },
+  { label: '导览', icon: Map },
+  { label: '我的', icon: UserRound },
+]
 
-  return (
-    <span className={styles.chip}>
-      {children}
-    </span>
-  )
-}
 export default function MuseumAiPage() {
-  const [query, setQuery] = useState('')
-  const relatedListRef = useRef<HTMLDivElement>(null)
-
-  function scrollRelatedArtifacts(direction: -1 | 1) {
-    const list = relatedListRef.current
-    if (!list) {
-      return
-    }
-
-    const firstItem = list.querySelector('button')
-    const listStyle = window.getComputedStyle(list)
-    const gap = Number.parseFloat(listStyle.columnGap || listStyle.gap) || 0
-    const itemWidth = firstItem?.getBoundingClientRect().width ?? 0
-
-    list.scrollBy({
-      left: direction * (itemWidth + gap) * 2,
-      behavior: 'smooth',
-    })
-  }
+  const [query, setQuery] = useState('该文物是属于西周早期的吗？')
+  const [isImagePreviewOpen, setIsImagePreviewOpen] = useState(false)
 
   return (
     <main className={styles.page}>
-      <AppHeader />
-      <section className={styles.workspace} aria-label="文博 AI 智能问答工作台">
-        <aside className={classNames(styles.panel, styles.leftPanel)}>
-          <h2>文物信息</h2>
-          <div className={styles.artifactPlaceholder}>
-            <div className={styles.artifactImageFrame}>
-              <img src={artifactMockUrl} alt="杜工部草堂诗笺" decoding="async" />
-            </div>
-            <div className={styles.artifactInfo}>
-              <div className={styles.artifactTitleBlock}>
-                <h3>杜工部草堂诗笺</h3>
-                <p>宋代重要杜诗注本 · 孤本</p>
-              </div>
-
-              <dl className={styles.artifactFacts}>
-                {artifactFacts.map((fact) => (
-                  <div className={styles.artifactFact} key={fact.label}>
-                    <dt>{fact.label}</dt>
-                    <dd>{fact.value}</dd>
-                  </div>
-                ))}
-              </dl>
-
-              <section className={styles.artifactIntro}>
-                <p>
-                  《杜工部草堂诗笺》五十卷，以编年集注的形式笺注杜甫诗歌，是宋代最重要的杜诗注本之一。此本无《诗笺》正文，所存五卷为宋祁撰《传叙碑铭》一卷、赵子栎与鲁訔撰《年谱》二卷、蔡梦弼辑《诗话》二卷，系孤本。季振宜等旧藏。
-                </p>
-              </section>
-
-              <section className={styles.relatedArtifacts} aria-label="相关文物">
-                <div className={styles.relatedArtifactHeader}>
-                  <h3>相关文物</h3>
-                  <div className={styles.relatedArtifactControls}>
-                    <button
-                      type="button"
-                      aria-label="向左查看更多相关文物"
-                      onClick={() => scrollRelatedArtifacts(-1)}
-                    >
-                      &lt;
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="向右查看更多相关文物"
-                      onClick={() => scrollRelatedArtifacts(1)}
-                    >
-                      &gt;
-                    </button>
-                  </div>
-                </div>
-                <div className={styles.relatedArtifactList} ref={relatedListRef}>
-                  {relatedArtifacts.map((artifactUrl, index) => (
-                    <button className={styles.relatedArtifactCard} type="button" key={artifactUrl}>
-                      <img
-                        src={artifactUrl}
-                        alt={`相关文物 ${index + 1}`}
-                        decoding="async"
-                        loading="lazy"
-                      />
-                    </button>
-                  ))}
-                </div>
-              </section>
-            </div>
+      <header className={styles.header}>
+        <div className={styles.brand}>
+          <div className={styles.brandSeal}>
+            <BookOpen size={20} strokeWidth={2.2} />
           </div>
+          <div className={styles.brandCopy}>
+            <h1>湖南博物院</h1>
+            <p>HUNAN MUSEUM</p>
+          </div>
+        </div>
+
+        <div className={styles.headerStatus}>
+          <span aria-hidden="true" />
+          <p>AI 讲解员就绪</p>
+        </div>
+        <button className={styles.menuButton} type="button" aria-label="打开菜单">
+          <Menu size={20} />
+        </button>
+      </header>
+
+      <section className={styles.workspace} aria-label="湖南博物院 AI 讲解界面">
+        <aside className={styles.leftSidebar}>
+          <section className={styles.artifactCard} aria-label="文物图片">
+            <img src={mockjpg} alt="杜工部草堂诗笺" decoding="async" />
+            <div className={styles.artifactOverlay} />
+            <div className={styles.cardActions}>
+              <button type="button" aria-label="放大查看" onClick={() => setIsImagePreviewOpen(true)}>
+                <Expand size={16} />
+              </button>
+            </div>
+            <div className={styles.cardBadges}>
+              <span>馆藏珍品</span>
+              <button type="button">
+                <Box size={12} />
+                3D 检视
+              </button>
+            </div>
+          </section>
+
+          <section className={styles.artifactDetails} aria-label="文物信息">
+            <div className={styles.titleBlock}>
+              <h2>杜工部草堂诗笺</h2>
+              <p>中国古代典籍 | 宋代刻本</p>
+            </div>
+
+            <dl className={styles.factList}>
+              {artifactFacts.map((fact) => (
+                <div className={styles.factRow} key={fact.label}>
+                  <dt>{fact.label}</dt>
+                  <dd>{fact.value}</dd>
+                </div>
+              ))}
+            </dl>
+
+            <section className={styles.introBlock}>
+              <h3>
+                <BookOpen size={14} />
+                文物简介
+              </h3>
+              <p>
+              《杜工部草堂诗笺》作为南宋时期杜诗学研究的巅峰之作，由鲁訔编定、蔡梦弼会笺，其四十卷的浩繁篇幅不仅系统性地整理了“千家注杜”的宋代学术成果，更在版本史上具有举足轻重的地位。该书在编排上独具匠心，打破了旧有的题材分类限制，采取分体编年之法，力求在还原杜甫颠沛流离一生轨迹的同时，通过对唐代典章制度、地理沿革及史实的细致考释，精准解读杜诗“诗史”的深刻内涵。书中汇集了王洙、赵彦材等名家的注评，保留了大量珍贵的散佚文献，其宋刊建安本更以版刻精美、校勘严谨著称，不仅是后世研究杜甫文学艺术与精神世界的基石，亦是中华典籍中不可多得的艺术瑰宝。
+              </p>
+            </section>
+          </section>
         </aside>
 
-        <section className={classNames(styles.panel, styles.chatPanel)} aria-label="文博 AI 对话">
-          <header className={styles.panelHeader}>
-            <div>
-              <h2>与历史对话</h2>
-            </div>
-          </header>
+        <section className={styles.chatPanel} aria-label="与 AI 馆长对话">
+          <div className={styles.chatContent}>
+            <header className={styles.chatHero}>
+              <h2>
+                <Sparkles size={20} />
+                与 AI 馆长对话
+                <Sparkles size={20} />
+              </h2>
+              <p>探索文物背后的历史，让 AI 为您深入解读文化遗产</p>
+            </header>
 
-          <div className={styles.welcomeState}>
-            <div className={styles.aiMark}>AI</div>
-            <h2>想研究哪件文物？</h2>
-            <p>
-              输入文物名称、年代、纹饰，或直接提出研究问题。搜索后会自动生成文物详情、AI 回答和右侧关系图谱。
-            </p>
-            <div className={styles.promptList}>
-              {prompts.map((prompt) => (
-                <button type="button" key={prompt}>
+            <div className={styles.aiMessage}>
+              <div className={styles.aiAvatar}>
+                <Sparkles size={20} />
+              </div>
+              <p>
+                您好！我是您的专属文物AI讲解员。关于这件
+                <strong>贾宝彝</strong>
+                ，您可以向我提问它的历史背景、工艺特点或文化内涵等问题。以下是一些大家常问的问题，您可以直接点击提问：
+              </p>
+            </div>
+
+            <div className={styles.promptGrid}>
+              {prompts.map((prompt, index) => (
+                <button
+                  className={index === 0 ? styles.activePrompt : undefined}
+                  type="button"
+                  key={prompt}
+                  onClick={() => setQuery(prompt)}
+                >
+                  <MessageSquare size={16} />
                   {prompt}
                 </button>
               ))}
             </div>
           </div>
 
-          <div className={styles.recentTopics} aria-label="最近话题">
-            {recentTopics.map((topic) => (
-              <Chip key={topic} onClick={() => setQuery(topic)}>
-                {topic}
-              </Chip>
-            ))}
-          </div>
-
           <form className={styles.composer} onSubmit={(event) => event.preventDefault()}>
             <input
-              className={styles.composerInput}
               type="text"
-              aria-label="搜索文物或输入你的第一个问题"
-              placeholder="搜索文物或输入你的第一个问题..."
-              autoComplete="off"
+              aria-label="向 AI 馆长提问"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
+              placeholder="该文物是属于西周早期的吗？"
+              autoComplete="off"
             />
+            <button type="submit" aria-label="发送问题">
+              <Send size={18} fill="currentColor" />
+            </button>
           </form>
         </section>
 
-        <aside className={classNames(styles.panel, styles.graphPanel)}>
-          <header className={styles.panelHeader}>
-            <div>
-              <h2>Graph 关系图谱</h2>
-            </div>
+        <aside className={styles.rightSidebar} aria-label="知识图谱">
+          <header className={styles.graphHeader}>
+            <h2>
+              <Sparkles size={16} />
+              知识图谱
+            </h2>
+            <p>文物关联知识网络可视化</p>
           </header>
 
-          <div className={styles.graphCanvas} aria-label="文物关系图谱">
+          <div className={styles.graphArea}>
             <KnowledgeGraph />
           </div>
+
+          <section className={styles.graphLegend} aria-label="图谱说明">
+            <h3>图谱说明</h3>
+            <p>
+              <span className={styles.centerDot} />
+              中心文物本体
+            </p>
+            <p>
+              <span className={styles.nodeDot} />
+              可拓展属性节点 (点击探索)
+            </p>
+          </section>
         </aside>
       </section>
+
+      {isImagePreviewOpen && (
+        <div className={styles.imagePreviewBackdrop} role="presentation" onClick={() => setIsImagePreviewOpen(false)}>
+          <section
+            className={styles.imagePreviewDialog}
+            role="dialog"
+            aria-modal="true"
+            aria-label="放大查看文物图片"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button type="button" aria-label="关闭放大图片" onClick={() => setIsImagePreviewOpen(false)}>
+              <X size={18} />
+            </button>
+            <img src={mockjpg} alt="杜工部草堂诗笺" decoding="async" />
+          </section>
+        </div>
+      )}
+
+      <nav className={styles.bottomNav} aria-label="底部导航">
+        <div className={styles.navInner}>
+          {navItems.slice(0, 2).map((item) => (
+            <button type="button" key={item.label}>
+              <item.icon size={20} />
+              <span>{item.label}</span>
+            </button>
+          ))}
+
+          <button className={styles.aiNavButton} type="button" aria-current="page">
+            <span>
+              <AudioLines size={24} />
+            </span>
+            <strong>AI讲解</strong>
+          </button>
+
+          {navItems.slice(2).map((item) => (
+            <button type="button" key={item.label}>
+              <item.icon size={20} />
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </div>
+      </nav>
     </main>
   )
 }
