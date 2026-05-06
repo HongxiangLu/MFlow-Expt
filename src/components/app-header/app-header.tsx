@@ -1,30 +1,37 @@
-import logoUrl from './logo.svg'
+import { Menu } from 'lucide-react'
 import styles from './app-header.module.scss'
+import logo from './logo.svg'
 
 type AppHeaderProps = {
   title?: string
   subtitle?: string
+  status?: string
 }
 
 export default function AppHeader({
-  title = '文博知识图谱 AI 助手',
-  subtitle = 'Cultural and Creative Knowledge Graph AI Assistant',
+  title = '文通博物院',
+  subtitle = 'WENTONG MUSEUM',
+  status = 'AI 讲解员就绪',
 }: AppHeaderProps) {
   return (
-    <section className={styles.topNav} aria-label="文博 AI 工作台导航">
+    <header className={styles.header}>
       <div className={styles.brand}>
-        <div className={styles.seal}>
-          <img src={logoUrl} alt="文博知识图谱 AI 助手" />
+        <div className={styles.brandSeal}>
+          <img src={logo} width={40} />
         </div>
         <div className={styles.brandCopy}>
           <h1>{title}</h1>
           <p>{subtitle}</p>
         </div>
       </div>
-        <div className={styles.searchInput}>
-          <span className={styles.searchIcon}>⌕</span>
-          <span>搜索文物名称/ 年代</span>
-        </div>
-    </section>
+
+      <div className={styles.headerStatus}>
+        <span aria-hidden="true" />
+        <p>{status}</p>
+      </div>
+      <button className={styles.menuButton} type="button" aria-label="打开菜单">
+        <Menu size={20} />
+      </button>
+    </header>
   )
 }

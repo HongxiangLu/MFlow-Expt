@@ -255,26 +255,10 @@ $copy: #d4d4d8;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-color: rgba($gold, 0.5) rgba(255, 255, 255, 0.06);
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
+  scrollbar-width: none;
 
   &::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  &::-webkit-scrollbar-track {
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.06);
-  }
-
-  &::-webkit-scrollbar-thumb {
-    border-radius: 999px;
-    background: rgba(212, 175, 55, 0.48);
-  }
-
-  &::-webkit-scrollbar-thumb:hover {
-    background: rgba(212, 175, 55, 0.68);
+    display: none;
   }
 }
 
@@ -372,10 +356,11 @@ $copy: #d4d4d8;
 }
 
 .chatContent {
-  width: min(760px, calc(100% - 48px));
+  width: 100%;
   flex: 1 1 auto;
   min-height: 0;
-  margin: 48px auto 0;
+  margin: 0;
+  padding-top: 48px;
   padding-bottom: 24px;
   overflow-x: hidden;
   overflow-y: auto;
@@ -403,6 +388,15 @@ $copy: #d4d4d8;
   }
 }
 
+.chatContent > .chatHero,
+.chatContent > .aiMessage,
+.chatContent > .promptGrid,
+.chatContent > .chatThread {
+  width: min(760px, calc(100% - 48px));
+  margin-right: auto;
+  margin-left: auto;
+}
+
 .chatHero {
   display: grid;
   gap: 8px;
@@ -422,7 +416,7 @@ $copy: #d4d4d8;
     letter-spacing: 1.2px;
 
     svg {
-      color: $gold;
+      color: #9f9fa9;
     }
   }
 
@@ -467,7 +461,6 @@ $copy: #d4d4d8;
   border-radius: 50%;
   background: linear-gradient(135deg, #d4af37 0%, #8c7323 100%);
   color: #0a0a0a;
-  box-shadow: 0 10px 15px rgba(212, 175, 55, 0.2);
 }
 
 .promptGrid {
@@ -815,7 +808,6 @@ $copy: #d4d4d8;
     font-size: 11px;
     font-weight: 500;
     line-height: 16.5px;
-    filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.12));
   }
 }
 
@@ -871,7 +863,15 @@ $copy: #d4d4d8;
   }
 
   .chatContent {
-    margin-top: 34px;
+    width: 100%;
+    padding-top: 34px;
+  }
+
+  .chatContent > .chatHero,
+  .chatContent > .aiMessage,
+  .chatContent > .promptGrid,
+  .chatContent > .chatThread {
+    width: min(520px, calc(100% - 24px));
   }
 
   .chatHero h2 {

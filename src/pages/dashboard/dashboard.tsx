@@ -6,7 +6,6 @@ import {
   Box,
   Expand,
   Map,
-  Menu,
   MessageSquare,
   Search,
   Send,
@@ -14,6 +13,7 @@ import {
   UserRound,
   X,
 } from 'lucide-react'
+import AppHeader from '../../components/app-header/app-header'
 import KnowledgeGraph from '../../components/knowledge-graph/knowledge-graph'
 import mockjpg from '../../../mock/mock.jpg'
 import mockSseText from '../../../mock/mock.txt?raw'
@@ -340,25 +340,7 @@ export default function MuseumAiPage() {
 
   return (
     <main className={styles.page}>
-      <header className={styles.header}>
-        <div className={styles.brand}>
-          <div className={styles.brandSeal}>
-            <BookOpen size={20} strokeWidth={2.2} />
-          </div>
-          <div className={styles.brandCopy}>
-            <h1>湖南博物院</h1>
-            <p>HUNAN MUSEUM</p>
-          </div>
-        </div>
-
-        <div className={styles.headerStatus}>
-          <span aria-hidden="true" />
-          <p>AI 讲解员就绪</p>
-        </div>
-        <button className={styles.menuButton} type="button" aria-label="打开菜单">
-          <Menu size={20} />
-        </button>
-      </header>
+      <AppHeader />
 
       <section className={styles.workspace} aria-label="湖南博物院 AI 讲解界面">
         <aside className={styles.leftSidebar}>

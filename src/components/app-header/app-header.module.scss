@@ -1,106 +1,99 @@
-$paper: #fffcf5;
-$surface: #faf5e8;
-$ink: #1a1714;
-$muted: #736657;
-$soft-border: rgba(212, 199, 173, 0.7);
+$surface: #121212;
+$surface-soft: #1a1a1a;
+$border: #2a241b;
+$gold-text: #e8d499;
 
-@mixin center {
-  display: grid;
-  place-items: center;
-}
-
-.topNav {
-  width: 100%;
-  min-width: 1120px;
-  height: 72px;
+.header {
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 0;
-  padding: 14px 22px;
-  background: $paper;
-  border: 1px solid $soft-border;
-  border-radius: 0;
-  box-shadow: 0 8px 22px rgba(41, 26, 13, 0.08);
-}
-
-.searchInput {
-  height: 40px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 12px;
-  border: 1px solid $soft-border;
-  border-radius: 20px;
-  background: $paper;
-  color: $muted;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.searchIcon {
-  width: 26px;
-  height: 26px;
-  @include center;
-  flex: 0 0 auto;
-  border-radius: 50%;
+  padding: 0 24px;
+  border-bottom: 1px solid $border;
   background: $surface;
-  font-weight: 800;
+  box-shadow:
+    0 4px 6px rgba(0, 0, 0, 0.1),
+    0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 12px;
-  width: 360px;
+  gap: 16px;
 }
 
-.seal {
-  width: 44px;
-  height: 44px;
-  @include center;
-  flex: 0 0 auto;
-  overflow: hidden;
+.brandSeal {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
 
   img {
-    width: 44px;
-    height: 44px;
+    width: 40px;
+    height: 40px;
     display: block;
+    object-fit: contain;
   }
 }
 
 .brandCopy {
   display: grid;
-  gap: 2px;
+  gap: 0;
 
   h1 {
     margin: 0;
-    color: $ink;
-    font-size: 18px;
-    font-weight: 800;
-    line-height: 21px;
-    letter-spacing: 0;
+    color: $gold-text;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+    letter-spacing: 1.4px;
   }
 
   p {
-    color: $muted;
-    font-size: 11px;
-    font-weight: 600;
-    line-height: 13px;
+    color: rgba(212, 175, 55, 0.6);
+    font-size: 10px;
+    line-height: 15px;
+    letter-spacing: 1px;
   }
 }
 
-@media (max-width: 1199px) {
-  .topNav {
-    width: 100%;
-    min-width: 0;
-    height: auto;
-    flex-wrap: wrap;
-    gap: 14px;
+.headerStatus {
+  height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  padding: 0 13px;
+  border: 1px solid $border;
+  border-radius: 999px;
+  background: $surface-soft;
+
+  span {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #00bc7d;
+    opacity: 0.6;
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
   }
 
-  .brand,
-  .searchInput {
-    width: auto;
+  p {
+    color: #9f9fa9;
+    font-size: 12px;
+    line-height: 16px;
   }
+}
+
+.menuButton {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  margin-left: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #71717b;
+  cursor: pointer;
 }
