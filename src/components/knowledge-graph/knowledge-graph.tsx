@@ -22,7 +22,7 @@ type EdgeAttributes = {
 }
 
 const nodes: Array<[string, Omit<NodeAttributes, 'x' | 'y'>]> = [
-  ['jiaboyi', { label: '贾宝彝', size: 18, color: '#d4af37' }],
+  ['jiaboyi', { label: '杜工部草堂诗笺', size: 18, color: '#d4af37' }],
   ['western-zhou', { label: '西周早期', size: 13, color: '#b8873a' }],
   ['bronze', { label: '青铜', size: 13, color: '#0f766e' }],
   ['ritual-vessel', { label: '青铜礼器', size: 12, color: '#7f4f24' }],
@@ -317,7 +317,7 @@ export default function KnowledgeGraph() {
 
   return (
     <div className={styles.graph} ref={graphRef}>
-      <div className={styles.graphStage} ref={containerRef} aria-label="贾宝彝知识图谱 Sigma 画布" />
+      <div className={styles.graphStage} ref={containerRef} aria-label="杜工部草堂诗笺知识图谱 Sigma 画布" />
       <button
         className={styles.fullscreenButton}
         type="button"

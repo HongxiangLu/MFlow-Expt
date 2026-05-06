@@ -131,7 +131,7 @@ export default function MuseumAiPage() {
               </div>
               <p>
                 您好！我是您的专属文物AI讲解员。关于这件
-                <strong>贾宝彝</strong>
+                <strong>杜工部草堂诗笺</strong>
                 ，您可以向我提问它的历史背景、工艺特点或文化内涵等问题。以下是一些大家常问的问题，您可以直接点击提问：
               </p>
             </div>
