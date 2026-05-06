@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type UIEvent, type WheelEvent } from 'react'
 import {
   Archive,
   AudioLines,
@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import KnowledgeGraph from '../../components/knowledge-graph/knowledge-graph'
 import mockjpg from '../../../mock/mock.jpg'
+import mockSseText from '../../../mock/mock.txt?raw'
 import styles from './dashboarad.module.scss'
 
 const artifactFacts = [
@@ -42,9 +43,300 @@ const navItems = [
   { label: '我的', icon: UserRound },
 ]
 
+type ChatMessage = {
+  id: number
+  role: 'user' | 'assistant'
+  content: string
+  isStreaming?: boolean
+}
+
+type SseFrame = {
+  chunk: string
+  finish_reason: null | 'stop'
+}
+
+const streamChunkMinSize = 1
+const streamChunkMaxSize = 2
+const autoScrollThreshold = 48
+const resumeAutoScrollThreshold = 4
+const programmaticScrollResetDelay = 120
+
+function parseMockSseFrames(sseText: string) {
+  return sseText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('data:'))
+    .map((line) => JSON.parse(line.slice(5).trim()) as SseFrame)
+}
+
+function splitStreamChunk(chunk: string) {
+  const chars = Array.from(chunk)
+  const chunks: string[] = []
+  let cursor = 0
+
+  while (cursor < chars.length) {
+    const size = cursor % 3 === 0 ? streamChunkMinSize : streamChunkMaxSize
+    chunks.push(chars.slice(cursor, cursor + size).join(''))
+    cursor += size
+  }
+
+  return chunks
+}
+
+function createDisplayFrames(frames: SseFrame[]) {
+  return frames.flatMap((frame) => {
+    if (frame.finish_reason === 'stop') {
+      return [frame]
+    }
+
+    return splitStreamChunk(frame.chunk).map((chunk) => ({ chunk, finish_reason: null }))
+  })
+}
+
+function getStreamDelay(frame: SseFrame) {
+  if (frame.finish_reason === 'stop') {
+    return 0
+  }
+
+  if (frame.chunk.includes('\n\n')) {
+    return 780
+  }
+
+  if (/[。！？!?；;：:]$/.test(frame.chunk.trim())) {
+    return 520
+  }
+
+  if (/[，,、]$/.test(frame.chunk.trim())) {
+    return 280
+  }
+
+  return 95
+}
+
+function isNearScrollBottom(element: HTMLElement) {
+  return element.scrollHeight - element.scrollTop - element.clientHeight <= autoScrollThreshold
+}
+
+function isAtScrollBottom(element: HTMLElement) {
+  return element.scrollHeight - element.scrollTop - element.clientHeight <= resumeAutoScrollThreshold
+}
+
+function isScrollable(element: HTMLElement) {
+  return element.scrollHeight > element.clientHeight + 1
+}
+
+const mockSseFrames = createDisplayFrames(parseMockSseFrames(mockSseText))
+
+function createMockSseStream(onFrame: (frame: SseFrame) => void) {
+  let cursor = 0
+  let timerId: number | undefined
+
+  const playNextFrame = () => {
+    timerId = undefined
+
+    if (cursor >= mockSseFrames.length) {
+      onFrame({ chunk: '', finish_reason: 'stop' })
+      return
+    }
+
+    const frame = mockSseFrames[cursor]
+    cursor += 1
+    onFrame(frame)
+
+    if (frame.finish_reason === 'stop') {
+      return
+    }
+
+    timerId = window.setTimeout(playNextFrame, getStreamDelay(frame))
+  }
+
+  timerId = window.setTimeout(playNextFrame, 700)
+
+  return () => {
+    if (timerId !== undefined) {
+      window.clearTimeout(timerId)
+      timerId = undefined
+    }
+  }
+}
+
 export default function MuseumAiPage() {
-  const [query, setQuery] = useState('该文物是属于西周早期的吗？')
+  const [query, setQuery] = useState('')
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [isStreaming, setIsStreaming] = useState(false)
   const [isImagePreviewOpen, setIsImagePreviewOpen] = useState(false)
+  const nextMessageId = useRef(1)
+  const cancelStreamRef = useRef<(() => void) | undefined>(undefined)
+  const chatContentRef = useRef<HTMLDivElement | null>(null)
+  const shouldAutoScrollRef = useRef(true)
+  const isUserViewingHistoryRef = useRef(false)
+  const isProgrammaticScrollRef = useRef(false)
+  const pendingAutoScrollRef = useRef(false)
+  const lastScrollTopRef = useRef(0)
+  const programmaticScrollTimerRef = useRef<number | undefined>(undefined)
+
+  useEffect(() => {
+    return () => {
+      cancelStreamRef.current?.()
+      if (programmaticScrollTimerRef.current !== undefined) {
+        window.clearTimeout(programmaticScrollTimerRef.current)
+      }
+    }
+  }, [])
+
+  const scrollChatToBottom = () => {
+    const chatContent = chatContentRef.current
+
+    if (!chatContent) {
+      return
+    }
+
+    isProgrammaticScrollRef.current = true
+    chatContent.scrollTop = chatContent.scrollHeight
+    lastScrollTopRef.current = chatContent.scrollTop
+
+    if (programmaticScrollTimerRef.current !== undefined) {
+      window.clearTimeout(programmaticScrollTimerRef.current)
+    }
+
+    programmaticScrollTimerRef.current = window.setTimeout(() => {
+      isProgrammaticScrollRef.current = false
+      programmaticScrollTimerRef.current = undefined
+    }, programmaticScrollResetDelay)
+  }
+
+  const queueAutoScroll = (force = false) => {
+    const chatContent = chatContentRef.current
+
+    pendingAutoScrollRef.current =
+      force ||
+      Boolean(chatContent && !isUserViewingHistoryRef.current && shouldAutoScrollRef.current && isNearScrollBottom(chatContent))
+  }
+
+  useLayoutEffect(() => {
+    if (!pendingAutoScrollRef.current) {
+      return
+    }
+
+    pendingAutoScrollRef.current = false
+    scrollChatToBottom()
+  }, [messages])
+
+  const handleChatScroll = (event: UIEvent<HTMLDivElement>) => {
+    if (isProgrammaticScrollRef.current) {
+      lastScrollTopRef.current = event.currentTarget.scrollTop
+      return
+    }
+
+    const currentScrollTop = event.currentTarget.scrollTop
+    const isScrollingUp = currentScrollTop < lastScrollTopRef.current
+    const isAtBottom = isAtScrollBottom(event.currentTarget)
+
+    lastScrollTopRef.current = currentScrollTop
+
+    if (isScrollingUp && isScrollable(event.currentTarget)) {
+      shouldAutoScrollRef.current = false
+      isUserViewingHistoryRef.current = true
+      return
+    }
+
+    if (isUserViewingHistoryRef.current) {
+      shouldAutoScrollRef.current = isAtBottom
+      isUserViewingHistoryRef.current = !isAtBottom
+      return
+    }
+
+    const isNearBottom = isNearScrollBottom(event.currentTarget)
+    shouldAutoScrollRef.current = isNearBottom
+    isUserViewingHistoryRef.current = !isNearBottom
+  }
+
+  const handleChatWheel = (event: WheelEvent<HTMLDivElement>) => {
+    isProgrammaticScrollRef.current = false
+
+    if (event.deltaY < 0 && isScrollable(event.currentTarget)) {
+      shouldAutoScrollRef.current = false
+      isUserViewingHistoryRef.current = true
+      return
+    }
+
+    window.requestAnimationFrame(() => {
+      const chatContent = chatContentRef.current
+
+      if (!chatContent) {
+        return
+      }
+
+      const isAtBottom = isAtScrollBottom(chatContent)
+      shouldAutoScrollRef.current = isAtBottom
+      isUserViewingHistoryRef.current = !isAtBottom
+    })
+  }
+
+  const handleManualScrollIntent = (event: UIEvent<HTMLDivElement>) => {
+    isProgrammaticScrollRef.current = false
+
+    if (isScrollable(event.currentTarget)) {
+      shouldAutoScrollRef.current = false
+      isUserViewingHistoryRef.current = true
+    }
+
+    if (programmaticScrollTimerRef.current !== undefined) {
+      window.clearTimeout(programmaticScrollTimerRef.current)
+      programmaticScrollTimerRef.current = undefined
+    }
+  }
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    const submittedQuery = query.trim()
+
+    if (!submittedQuery || isStreaming) {
+      return
+    }
+
+    cancelStreamRef.current?.()
+    cancelStreamRef.current = undefined
+    shouldAutoScrollRef.current = true
+    isUserViewingHistoryRef.current = false
+    queueAutoScroll(true)
+
+    const userMessageId = nextMessageId.current
+    const assistantMessageId = nextMessageId.current + 1
+    nextMessageId.current += 2
+
+    setMessages((currentMessages) => [
+      ...currentMessages,
+      { id: userMessageId, role: 'user', content: submittedQuery },
+      { id: assistantMessageId, role: 'assistant', content: '', isStreaming: true },
+    ])
+    setQuery('')
+    setIsStreaming(true)
+
+    cancelStreamRef.current = createMockSseStream((frame) => {
+      if (frame.finish_reason === 'stop') {
+        cancelStreamRef.current?.()
+        cancelStreamRef.current = undefined
+        queueAutoScroll()
+
+        setIsStreaming(false)
+        setMessages((currentMessages) =>
+          currentMessages.map((message) =>
+            message.id === assistantMessageId ? { ...message, isStreaming: false } : message,
+          ),
+        )
+        return
+      }
+
+      queueAutoScroll()
+      setMessages((currentMessages) =>
+        currentMessages.map((message) =>
+          message.id === assistantMessageId ? { ...message, content: `${message.content}${frame.chunk}` } : message,
+        ),
+      )
+    })
+  }
 
   return (
     <main className={styles.page}>
@@ -115,43 +407,77 @@ export default function MuseumAiPage() {
         </aside>
 
         <section className={styles.chatPanel} aria-label="与 AI 馆长对话">
-          <div className={styles.chatContent}>
-            <header className={styles.chatHero}>
-              <h2>
-                <Sparkles size={20} />
-                与 AI 馆长对话
-                <Sparkles size={20} />
-              </h2>
-              <p>探索文物背后的历史，让 AI 为您深入解读文化遗产</p>
-            </header>
+          <div
+            className={styles.chatContent}
+            ref={chatContentRef}
+            onScroll={handleChatScroll}
+            onWheel={handleChatWheel}
+            onPointerDown={handleManualScrollIntent}
+            onTouchStart={handleManualScrollIntent}
+          >
+            {messages.length === 0 ? (
+              <>
+                <header className={styles.chatHero}>
+                  <h2>
+                    <Sparkles size={20} />
+                    与 AI 馆长对话
+                    <Sparkles size={20} />
+                  </h2>
+                  <p>探索文物背后的历史，让 AI 为您深入解读文化遗产</p>
+                </header>
 
-            <div className={styles.aiMessage}>
-              <div className={styles.aiAvatar}>
-                <Sparkles size={20} />
+                <div className={styles.aiMessage}>
+                  <div className={styles.aiAvatar}>
+                    <Sparkles size={20} />
+                  </div>
+                  <p>
+                    您好！我是您的专属文物AI讲解员。关于这件
+                    <strong>杜工部草堂诗笺</strong>
+                    ，您可以向我提问它的历史背景、工艺特点或文化内涵等问题。以下是一些大家常问的问题，您可以直接点击提问：
+                  </p>
+                </div>
+
+                <div className={styles.promptGrid}>
+                  {prompts.map((prompt) => (
+                    <button
+                      className={query === prompt ? styles.activePrompt : undefined}
+                      type="button"
+                      key={prompt}
+                      onClick={() => setQuery(prompt)}
+                    >
+                      <MessageSquare size={16} />
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className={styles.chatThread}>
+                {messages.map((message) => (
+                  <article
+                    className={`${styles.chatTurn} ${
+                      message.role === 'user' ? styles.userTurn : styles.assistantTurn
+                    }`}
+                    key={message.id}
+                  >
+                    {message.role === 'assistant' && (
+                      <div className={styles.aiAvatar}>
+                        <Sparkles size={20} />
+                      </div>
+                    )}
+                    <div className={styles.messageBubble}>
+                      <p>
+                        {message.content}
+                        {message.isStreaming && <span className={styles.streamCursor} aria-hidden="true" />}
+                      </p>
+                    </div>
+                  </article>
+                ))}
               </div>
-              <p>
-                您好！我是您的专属文物AI讲解员。关于这件
-                <strong>杜工部草堂诗笺</strong>
-                ，您可以向我提问它的历史背景、工艺特点或文化内涵等问题。以下是一些大家常问的问题，您可以直接点击提问：
-              </p>
-            </div>
-
-            <div className={styles.promptGrid}>
-              {prompts.map((prompt, index) => (
-                <button
-                  className={index === 0 ? styles.activePrompt : undefined}
-                  type="button"
-                  key={prompt}
-                  onClick={() => setQuery(prompt)}
-                >
-                  <MessageSquare size={16} />
-                  {prompt}
-                </button>
-              ))}
-            </div>
+            )}
           </div>
 
-          <form className={styles.composer} onSubmit={(event) => event.preventDefault()}>
+          <form className={styles.composer} onSubmit={handleSubmit}>
             <input
               type="text"
               aria-label="向 AI 馆长提问"
@@ -160,7 +486,7 @@ export default function MuseumAiPage() {
               placeholder="该文物是属于西周早期的吗？"
               autoComplete="off"
             />
-            <button type="submit" aria-label="发送问题">
+            <button type="submit" aria-label="发送问题" disabled={!query.trim() || isStreaming}>
               <Send size={18} fill="currentColor" />
             </button>
           </form>

@@ -131,7 +131,7 @@ $copy: #d4d4d8;
 .workspace {
   height: calc(100svh - 120px);
   display: grid;
-  grid-template-columns: 340px minmax(440px, 1fr) 340px;
+  grid-template-columns: 380px minmax(440px, 1fr) 440px;
   border-bottom: 1px solid $border;
 }
 
@@ -168,6 +168,14 @@ $copy: #d4d4d8;
     display: block;
     object-fit: cover;
     opacity: 0.8;
+    transition:
+      opacity 180ms ease,
+      transform 260ms ease;
+  }
+
+  &:hover img {
+    opacity: 0.92;
+    transform: scale(1.04);
   }
 }
 
@@ -364,8 +372,35 @@ $copy: #d4d4d8;
 }
 
 .chatContent {
-  width: min(672px, calc(100% - 64px));
+  width: min(760px, calc(100% - 48px));
+  flex: 1 1 auto;
+  min-height: 0;
   margin: 48px auto 0;
+  padding-bottom: 24px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overflow-anchor: none;
+  scrollbar-color: rgba($gold, 0.5) rgba(255, 255, 255, 0.06);
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  &::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: rgba(212, 175, 55, 0.48);
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: rgba(212, 175, 55, 0.68);
+  }
 }
 
 .chatHero {
@@ -473,6 +508,74 @@ $copy: #d4d4d8;
   }
 }
 
+.chatThread {
+  display: grid;
+  gap: 18px;
+}
+
+.chatTurn {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.assistantTurn {
+  justify-content: flex-start;
+}
+
+.userTurn {
+  justify-content: flex-end;
+}
+
+.messageBubble {
+  max-width: min(600px, 82%);
+  padding: 16px 18px;
+  border: 1px solid $border;
+  border-radius: 8px;
+  background: rgba(26, 26, 26, 0.92);
+  box-shadow:
+    0 10px 15px rgba(0, 0, 0, 0.1),
+    0 4px 6px rgba(0, 0, 0, 0.1);
+
+  p {
+    color: $copy;
+    font-size: 14px;
+    line-height: 24px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+}
+
+.userTurn .messageBubble {
+  border-color: rgba(212, 175, 55, 0.55);
+  background: rgba(212, 175, 55, 0.14);
+
+  p {
+    color: $gold-text;
+  }
+}
+
+.streamCursor {
+  width: 1px;
+  height: 16px;
+  display: inline-block;
+  margin-left: 2px;
+  vertical-align: -2px;
+  background: $gold;
+  animation: cursorPulse 0.9s ease-in-out infinite;
+}
+
+@keyframes cursorPulse {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
 .composer {
   width: min(672px, calc(100% - 64px));
   height: 54px;
@@ -513,6 +616,11 @@ $copy: #d4d4d8;
     background: $gold;
     color: #0a0a0a;
     cursor: pointer;
+  }
+
+  button:disabled {
+    opacity: 0.46;
+    cursor: not-allowed;
   }
 }
 
@@ -759,7 +867,7 @@ $copy: #d4d4d8;
 
   .chatContent,
   .composer {
-    width: min(444px, calc(100% - 32px));
+    width: min(520px, calc(100% - 24px));
   }
 
   .chatContent {
@@ -786,6 +894,20 @@ $copy: #d4d4d8;
   .aiAvatar {
     width: 28px;
     height: 28px;
+  }
+
+  .chatTurn {
+    gap: 10px;
+  }
+
+  .messageBubble {
+    max-width: min(342px, 84%);
+    padding: 12px 14px;
+
+    p {
+      font-size: 11px;
+      line-height: 20px;
+    }
   }
 
   .promptGrid {
