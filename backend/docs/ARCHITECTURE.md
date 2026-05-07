@@ -70,8 +70,9 @@ backend/
     1. 通过 SQLAlchemy 查询对应 `session_id` 的全部历史消息（不设轮数与 Token 上限）。
     2. 将用户原始 Query 传给 `mflow_client` 获取文档上下文 (Context)。
     3. 组装 Prompt（System Prompt + History + Query），调用 LLM 获取 SSE 流式响应。
-    4. 过滤 MiniMax 模型输出的 `<think>...</think>` 思维链标签（详见下方说明）。
-    5. 异步将用户问题和完整回答（已清理思维链）持久化到数据库（通过 `AsyncSession`）。
+    4. 将模型返回的增量文本进一步按**单字符**拆分后逐帧下发，形成稳定的“逐字打字机”效果。
+    5. 过滤 MiniMax 模型输出的 `<think>...</think>` 思维链标签（详见下方说明）。
+    6. 异步将用户问题和完整回答（已清理思维链）持久化到数据库（通过 `AsyncSession`）。
     *   **System Prompt 模板**（固定角色前缀 + 动态上下文注入，最大化 KV Cache 命中率）：
         ```
         你是一位博物馆文物专家，擅长解答关于历史文物、古代工艺、文化遗产等领域的问题。
@@ -81,7 +82,7 @@ backend/
         【检索到的知识内容】
         {context}
         ```
-    *   **SSE yield 格式**：`stream_chat()` 是一个异步生成器，yield `{"event": "message"|"error", "data": "<JSON>"}` 格式的 dict，供路由层的 `EventSourceResponse` 直接消费。
+    *   **SSE yield 格式**：`stream_chat()` 是一个异步生成器，yield `{"event": "message"|"error", "data": "<JSON>"}` 格式的 dict，供路由层的 `EventSourceResponse` 直接消费；其中正常消息帧按**单字符粒度**发送。
 *   **`graph_service.py`**: 负责处理知识图谱渲染接口。**独立执行 Query Rewrite**，与 Chat 接口彻底解耦。
     1. 查询全部历史（用于重写）。
     2. **跳过策略**：首先由后端代码判定 session 内是否有历史消息——若无历史（首轮对话）则跳过重写，直接使用原始 query；若有历史，则调用 LLM 进行 Query Rewrite（Prompt 中指示"如果当前提问语义已充分独立，则原样返回"），输出为**纯文本**。

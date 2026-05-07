@@ -135,18 +135,22 @@ data: {"code": "llm_timeout", "message": "大模型响应超时，请稍后重�
 
 | 字段名          | 类型   | 描述                                                         |
 | :-------------- | :----- | :----------------------------------------------------------- |
-| `chunk`         | String | 增量生成的模型文本片段。                                     |
+| `chunk`         | String | 增量生成的模型文本字符（后端按单字符粒度逐帧推送）。         |
 | `finish_reason` | String | 结束标志。流进行中为 `null`，正常结束为 `"stop"`。           |
 
 **响应流示例（正常）**:
 ```text
 data: {"chunk": "M", "finish_reason": null}
 
-data: {"chunk": "-Flow", "finish_reason": null}
+data: {"chunk": "-", "finish_reason": null}
 
-data: {"chunk": " 是", "finish_reason": null}
+data: {"chunk": "F", "finish_reason": null}
 
-data: {"chunk": "一个", "finish_reason": null}
+data: {"chunk": "l", "finish_reason": null}
+
+data: {"chunk": "o", "finish_reason": null}
+
+data: {"chunk": "w", "finish_reason": null}
 
 data: {"chunk": "", "finish_reason": "stop"}
 
@@ -160,7 +164,7 @@ data: {"chunk": "抱歉，未能检索到与您提问相关的知识内容。请
 
 **响应流示例（推流中途异常）**:
 ```text
-data: {"chunk": "M-Flow 是一个", "finish_reason": null}
+data: {"chunk": "M", "finish_reason": null}
 
 event: error
 data: {"code": "llm_timeout", "message": "大模型响应超时，请稍后重试"}

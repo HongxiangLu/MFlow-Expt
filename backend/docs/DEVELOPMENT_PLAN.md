@@ -256,7 +256,7 @@ async def stream_chat(query: str, session_id: str, db: AsyncSession):
     # 3. 若上下文为空 → yield 降级提示信息（API.md §1.5.3）→ return
     # 4. 组装 messages = [system_prompt] + history + [context + query]
     # 5. 调用 llm_client.chat.completions.create(stream=True)
-    # 6. 逐 chunk yield SSE 数据帧
+    # 6. 将模型增量按单字符拆分后逐帧 yield SSE 数据
     # 7. 拼接完整回答，异步写入 user + assistant 两条 Message
 ```
 

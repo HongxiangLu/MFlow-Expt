@@ -165,7 +165,7 @@ async def stream_chat(query: str, session_id: str, db: AsyncSession):
             delta = chunk.choices[0].delta if chunk.choices else None
             if delta and delta.content:
                 text = delta.content
-                logger.info("收到 MiniMax 原始增量: %s", text)
+                logger.info("收到 MiniMax 原始增量: char_count=%d, preview=%s", len(text), text[:80])
 
                 # 过滤 MiniMax 模型的 <think>...</think> 思维链输出
                 # 思维链可能跨多个 chunk，需要用状态标记追踪
@@ -183,16 +183,19 @@ async def stream_chat(query: str, session_id: str, db: AsyncSession):
                         continue  # 仍在 think 标签内，跳过此 chunk
 
                 if text:  # 过滤后仍有有效内容
-                    full_answer += text
-                    message_payload = ChatChunk(
-                        chunk=text,
-                        finish_reason=None
-                    ).model_dump_json()
-                    logger.info("发送 SSE 消息帧: event=message, data=%s", message_payload)
-                    yield {
-                        "event": "message",
-                        "data": message_payload,
-                    }
+                    # 为实现“打字机”效果，将有效增量按单字符拆分后逐帧推送。
+                    # 日志在增量级别记录一次，避免逐字日志导致噪声过大。
+                    logger.info("发送 SSE 单字流帧: frame_count=%d", len(text))
+                    for ch in text:
+                        full_answer += ch
+                        message_payload = ChatChunk(
+                            chunk=ch,
+                            finish_reason=None
+                        ).model_dump_json()
+                        yield {
+                            "event": "message",
+                            "data": message_payload,
+                        }
 
         # 流结束：发送终止帧
         stop_payload = ChatChunk(

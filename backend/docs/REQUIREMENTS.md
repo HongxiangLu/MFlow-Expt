@@ -60,7 +60,7 @@
     *   `query` (String, 必填): 用户当前输入的文本问题。
     *   `session_id` (String, 必填): 当前会话的唯一标识，用于状态穿透与持久化关联。
 *   **响应体 (Response Format, `text/event-stream`)**:
-    *   `chunk` (String): 流式返回的文本片段。
+    *   `chunk` (String): 流式返回的文本字符（后端按单字符粒度推送）。
     *   `finish_reason` (String): 结束标志。流进行中为 `null`，正常结束为 `"stop"`。
 
 ### 3.2 核心业务接口二：图谱查询 (Graph Query Endpoint)
