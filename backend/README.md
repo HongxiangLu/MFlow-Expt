@@ -57,11 +57,16 @@
 - `fix/login-page-layout`
 - `hotfix/security-vulnerability-patch`
 
-# M-Flow 使用说明
+# M-Flow 说明
+
+> [!IMPORTANT]
+> **自动化补丁提示**：只要执行 [patch_mflow.py](file:///d:/Files/Codes/M-flow/backend/tools/patch_mflow.py) 这个脚本就可以将本章节中提及的所有需要修改的 M-Flow 源码内容自动修改完毕，无需手动逐一调整。
+
+## M-Flow 部分关键机制
 
 在本项目后端与底层 M-Flow 知识引擎集成的过程中，我们对 M-Flow 的节点与关系构建机制进行了深入溯源，特此记录核心原理解析，以供后续开发与环境部署参考。
 
-## 节点 (Node) 的定义与类型修改
+### 节点 (Node) 的定义与类型修改
 
 除系统节点外，业务实体节点（Entity）默认会有一条指向其分类（EntityType）的边，通过自然语言提示词驱动自动完成分类分配。M-Flow 在知识提取（Ingestion/Memorize）阶段的实体节点类型并非在数据库 Schema 中做强类型约束，而是**直接硬编码在底层大语言模型（LLM）的 Prompt 模板文件中**的。
 
@@ -97,7 +102,7 @@ ENTITY TYPES (choose one):
    artifact, dynasty, material, category, pattern, site, craft, inscription, usage, concept, person, collection, other.
 ```
 
-## 关系 (Edge) 的构建逻辑
+### 关系 (Edge) 的构建逻辑
 
 M-Flow 中的关系不仅仅有结构化类型（如 `relationship_name`），还会被赋予详尽的自然语言描述（`edge_text`）和数值权重（`weight`）。这些描述构成了图谱能直接回答复杂语义关联的基础。
 
@@ -110,32 +115,32 @@ M-Flow 中的关系不仅仅有结构化类型（如 `relationship_name`），�
 *   **对于入库**：因为真实入库（写入数据库）的边（Edge）的 label 是 M-Flow 框架代码中写死的结构化名称（如 `involves_entity`、`has_facet` 等）。大模型在入库的这一环节，只负责抽取节点实体，而**不负责**推断实体与实体之间的直接动作关系（Prompt 中明确限定了 `Edge/relationship inference is handled downstream`）。因此，开发者不需要去预定义一套动作关系白名单。
 *   **对于查询 (TRIPLET_COMPLETION)**：所谓的「三元组补全」，是在检索（Search）阶段发生的。系统通过图游走算法，沿着 `[实体] <- [involves_entity] - [片段] - [involves_entity] -> [实体]` 的路径进行补全。前端所拿到的图谱连线，实质上是这些结构化边的投射，我们在 API 封装层（`mflow_client.py`）统一将其 `label` 兜底降级为 `"related"` 以作展示。
 
-## 节点与关系的直接检索方式
+### 节点与关系的直接检索方式
 如果需要跳过大模型生成环节，直接获取底层的原生节点和边数据：
 1. **原生图查询 (CYPHER 模式)**：推荐做法。通过调用 `m_flow.search(..., query_type=RecallMode.CYPHER)` 并传入相应的 Cypher 查询语句（需注意 M-Flow 底层为了兼顾严格类型的图数据库，统一将实体存放在 `Node` 表中，边存放在 `EDGE` 表中，并通过提取 JSON 的 `properties` 字段来读取动态属性如 `edge_text`）。
 2. **三元组模式关联查询**：使用 `TRIPLET_COMPLETION` 模式，并结合参数 `only_context=True` 与 `use_combined_context=True`，可以在不触发 LLM 生成的前提下，让 M-Flow 后端拼装并返回包含节点和边的可视化结构数据（位于返回对象的 `graphs` 字段中）。
 
-## 上下文检索策略 (Recall Modes)
+### 上下文检索策略 (Recall Modes)
 M-Flow 支持直接跳过生成步骤获取上下文，其底层提供了以下三种代表性的知识检索策略：
 *   **EPISODIC (情境记忆检索)**：核心检索方式。基于事件树状结构进行检索，支持混合检索与时间加权打分，并依靠图谱游走自适应计算相关性。适用于询问过去发生的事件、复杂情境或会话记录。
 *   **TRIPLET_COMPLETION (三元组关联检索)**：精细粒度。基于图谱中的实体关系边进行扩散检索，具有基于跳数和图距离的衰减惩罚机制，主要用于传统图谱事实型回答的数据源。
 *   **CHUNKS_LEXICAL (文本块词法检索)**：回退到传统 RAG 模式。仅对文本块执行基于倒排索引的精确 Token/关键字匹配（Lexical matching），不涉及复杂的图结构扩散推断。
 
-## 流式输出 (Streaming) 的支持
+### 流式输出 (Streaming) 的支持
 
 1. **M-Flow Python 库不支持原生流式返回**：项目顶层暴露的 Python SDK（如 `query`、`search`）均为等待全部检索与生成完毕后，一次性返回 `QueryResult` 等数据结构的阻塞式调用。
 2. **业务系统的流式 RAG 实现**：在开发过程中，如果需要实现打字机效果的响应，推荐采用 **“解耦调用”** 的工程策略：
    * **第一步：检索**。调用 `m_flow.search()` 获取单纯的图谱/文本上下文。
    * **第二步：生成**。将获取的上下文直接组装至业务后端的 Prompt 中，交由标准的 LLM 客户端库（如 `AsyncOpenAI`）开启 `stream=True` 进行流式推理，最后经由 SSE 协议推送给前端。
 
-# M-Flow 的兼容性问题
+## M-Flow 的兼容性问题
 
-## MiniMax 的 System 角色限制
+### MiniMax 的 System 角色限制
 
 在使用 MiniMax 模型接入 M-Flow 进行图谱构建（如调用 `memorize()`）时，可能会遇到如下异常导致流程阻断：
 `litellm.BadRequestError: OpenAIException - invalid params, chat content has invalid message role: system (2013)`
 
-### 报错原因
+#### 报错原因
 
 这源于底层的格式严格校验：
 
@@ -143,7 +148,7 @@ M-Flow 支持直接跳过生成步骤获取上下文，其底层提供了以下�
 2. **Litellm 路由**：作为中间件的 `litellm`，即使在 `.env` 中配置了原生的 `LLM_MODEL=minimax/MiniMax-M2.7`，其负责处理的 `MinimaxChatConfig`（继承自 `OpenAIGPTConfig`）也未对 `system` 角色做降级或合并处理。
 3. **MiniMax 严格校验**：MiniMax 平台接口对于传入的 Role 字段有着极其严格的物理校验，直接拒绝并抛弃带有 `system` 标识的任何请求结构体。
 
-### 解决方案
+#### 解决方案
 
 修改环境内的 M-Flow 源代码，人为将 `system` 指令前置拼接并降级合并为 `user` 角色。需要修改以下三个底层文件：
 
@@ -185,7 +190,7 @@ def _build_messages(self, user_input: str, system_prompt: str) -> list:
 
 > **注意配置细节**：在 `backend/.env` 中**无需**配置 `LLM_ENDPOINT` 以及 `LLM_PROVIDER=custom` 属性，否则会导致 litellm 路由退化为兼容模式，掩盖了原生路由（报 `MinimaxException`）触发的问题。配置前缀 `minimax/` 即足以让它自动定位官方地址（国际版：https://api.minimax.io/v1）。
 
-## M-Flow 版本标识修正
+### M-Flow 版本标识修正
 
 若需要执行 `mflow -ui` 启动内置可视化界面，由于底层包名变更及 GitHub 仓库所有者迁移，需要手动对环境中的 M-Flow 源代码进行以下两处修正：
 
@@ -217,7 +222,7 @@ url = f"https://github.com/m-flow-project/m_flow/archive/refs/tags/v{clean}.zip"
 url = f"https://github.com/FlowElement-ai/m_flow/archive/refs/tags/v{clean}.zip"
 ```
 
-## Windows 环境下的历史日期
+### Windows 环境下的历史日期
 
 在 Windows 环境下入库包含 1970 年以前日期（如古籍年代）的数据时，可能会触发 `OSError: [Errno 22] Invalid argument`。这是因为 Windows 底层 C 库不支持负数时间戳（即 1970 年以前的 Unix 时间戳），导致 Python 的 `datetime.fromtimestamp()` 调用失败。
 
