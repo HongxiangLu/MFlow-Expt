@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 from core.llm import llm_client
+from core.utils import preview_text
 from db.models import ChatSession, Message
 from schemas.payloads import ChatChunk, SSEError
 from services import mflow_client
@@ -42,7 +43,6 @@ SYSTEM_PROMPT_TEMPLATE = (
 
 # 检索空结果时的降级提示信息（取自 API.md §1.5.3）
 FALLBACK_MESSAGE = "抱歉，未能检索到与您提问相关的知识内容。请尝试换一种方式提问，或提供更具体的关键词。"
-
 
 async def stream_chat(query: str, session_id: str, db: AsyncSession):
     """
@@ -84,10 +84,13 @@ async def stream_chat(query: str, session_id: str, db: AsyncSession):
     )
     history_messages = result.scalars().all()
     logger.info("历史消息查询完成: session_id=%s, history_count=%d", session_id, len(history_messages))
-    logger.info(
-        "历史消息内容: %s",
-        [{"role": msg.role, "content": msg.content} for msg in history_messages],
-    )
+    if history_messages:
+        logger.info(
+            "历史消息预览: last_role=%s, last_len=%d, last_preview=%s",
+            history_messages[-1].role,
+            len(history_messages[-1].content or ""),
+            preview_text(history_messages[-1].content or ""),
+        )
 
     # =================================================================
     # Step 2: RAG 知识检索
@@ -95,7 +98,12 @@ async def stream_chat(query: str, session_id: str, db: AsyncSession):
     try:
         context_list = await mflow_client.get_context(query)
         logger.info("M-Flow context 获取成功: session_id=%s, context_count=%d", session_id, len(context_list))
-        logger.info("M-Flow context 内容: %s", context_list)
+        if context_list:
+            logger.info(
+                "M-Flow context 预览: first_len=%d, first_preview=%s",
+                len(context_list[0]),
+                preview_text(context_list[0]),
+            )
     except Exception as e:
         logger.error("M-Flow 检索异常: %s", e, exc_info=True)
         error_payload = SSEError(
@@ -144,7 +152,13 @@ async def stream_chat(query: str, session_id: str, db: AsyncSession):
     # 追加当前用户提问
     messages.append({"role": "user", "content": query})
     logger.info("即将请求 MiniMax（stream=True）: model=%s", settings.MINIMAX_MODEL)
-    logger.info("MiniMax 请求 messages: %s", messages)
+    logger.info(
+        "MiniMax 请求摘要: message_count=%d, last_role=%s, last_len=%d, last_preview=%s",
+        len(messages),
+        messages[-1]["role"],
+        len(messages[-1]["content"]),
+        preview_text(messages[-1]["content"]),
+    )
 
     # =================================================================
     # Step 5: LLM 流式调用 + SSE 推送
@@ -177,7 +191,11 @@ async def stream_chat(query: str, session_id: str, db: AsyncSession):
                         _in_think = False
                         # 提取 </think> 之后的有效内容
                         text = text.split("</think>", 1)[1]
-                        logger.info("检测到 </think> 结束标签，恢复输出模式。标签后内容=%s", text)
+                        logger.info(
+                            "检测到 </think> 结束标签，恢复输出模式。标签后长度=%d，预览=%s",
+                            len(text),
+                            preview_text(text),
+                        )
                     else:
                         logger.info("当前增量位于 <think> 区间内，跳过输出")
                         continue  # 仍在 think 标签内，跳过此 chunk
@@ -268,8 +286,18 @@ async def stream_chat(query: str, session_id: str, db: AsyncSession):
     # 即使 full_answer 为空（极端情况），也照常落盘以保持历史完整性
     # 清理落盘内容中可能残留的 <think> 标签（防御性处理）
     clean_answer = re.sub(r"<think>.*?</think>", "", full_answer, flags=re.DOTALL).strip()
-    logger.info("准备落盘用户消息: session_id=%s, role=user, content=%s", session_id, query)
-    logger.info("准备落盘助手消息: session_id=%s, role=assistant, content=%s", session_id, clean_answer)
+    logger.info(
+        "准备落盘用户消息: session_id=%s, role=user, len=%d, preview=%s",
+        session_id,
+        len(query),
+        preview_text(query),
+    )
+    logger.info(
+        "准备落盘助手消息: session_id=%s, role=assistant, len=%d, preview=%s",
+        session_id,
+        len(clean_answer),
+        preview_text(clean_answer),
+    )
     db.add(Message(session_id=session_id, role="user", content=query))
     db.add(Message(session_id=session_id, role="assistant", content=clean_answer))
     await db.commit()

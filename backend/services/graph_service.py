@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 from core.llm import llm_client
+from core.utils import preview_text
 from db.models import Message
 from schemas.payloads import GraphResponse, GraphNode, GraphEdge
 from services import mflow_client
@@ -38,7 +39,6 @@ REWRITE_SYSTEM_PROMPT = (
     "如果当前提问的语义已经充分独立，不存在需要消解的指代，则原样返回用户的提问。\n"
     "只输出重写后的句子，不要添加任何解释或格式。"
 )
-
 
 async def query_graph(query: str, session_id: str, db: AsyncSession) -> GraphResponse:
     """
@@ -67,10 +67,13 @@ async def query_graph(query: str, session_id: str, db: AsyncSession) -> GraphRes
     )
     history_messages = result.scalars().all()
     logger.info("图谱查询历史消息: session_id=%s, history_count=%d", session_id, len(history_messages))
-    logger.info(
-        "图谱查询历史消息内容: %s",
-        [{"role": msg.role, "content": msg.content} for msg in history_messages],
-    )
+    if history_messages:
+        logger.info(
+            "图谱查询历史预览: last_role=%s, last_len=%d, last_preview=%s",
+            history_messages[-1].role,
+            len(history_messages[-1].content or ""),
+            preview_text(history_messages[-1].content or ""),
+        )
 
     # =================================================================
     # Step 2: Query Rewrite 跳过策略
@@ -92,7 +95,13 @@ async def query_graph(query: str, session_id: str, db: AsyncSession) -> GraphRes
     # Step 3: 图谱检索
     # =================================================================
     graph_data = await mflow_client.get_graph(rewritten_query)
-    logger.info("M-Flow 图谱检索结果: %s", graph_data)
+    logger.info(
+        "M-Flow 图谱检索摘要: graphId=%s, centerNodeId=%s, node_count=%d, edge_count=%d",
+        graph_data.get("graphId"),
+        graph_data.get("centerNodeId"),
+        len(graph_data.get("nodes", [])),
+        len(graph_data.get("edges", [])),
+    )
 
     # =================================================================
     # Step 4: 空结果处理
@@ -122,7 +131,6 @@ async def query_graph(query: str, session_id: str, db: AsyncSession) -> GraphRes
         len(response.nodes),
         len(response.edges),
     )
-    logger.info("图谱查询响应体: %s", response.model_dump())
     return response
 
 
@@ -148,7 +156,13 @@ async def _rewrite_query(query: str, history_messages: list[Message]) -> str:
 
     messages.append({"role": "user", "content": query})
     logger.info("即将请求 MiniMax 执行 Query Rewrite: model=%s", settings.MINIMAX_MODEL)
-    logger.info("Query Rewrite 请求 messages: %s", messages)
+    logger.info(
+        "Query Rewrite 请求摘要: message_count=%d, last_role=%s, last_len=%d, last_preview=%s",
+        len(messages),
+        messages[-1]["role"],
+        len(messages[-1]["content"]),
+        preview_text(messages[-1]["content"]),
+    )
 
     try:
         response = await llm_client.chat.completions.create(
@@ -156,21 +170,21 @@ async def _rewrite_query(query: str, history_messages: list[Message]) -> str:
             messages=messages,
             stream=False,
         )
-        logger.info("Query Rewrite 原始响应: %s", response)
+        logger.info("Query Rewrite 原始响应已收到")
 
         rewritten = response.choices[0].message.content.strip()
-        logger.info("Query Rewrite 原始文本: %s", rewritten)
+        logger.info("Query Rewrite 原始文本: len=%d, preview=%s", len(rewritten), preview_text(rewritten))
 
         # 清理 MiniMax 模型可能输出的 <think>...</think> 思维链标签
         rewritten = re.sub(r"<think>.*?</think>", "", rewritten, flags=re.DOTALL).strip()
 
         # 防御空返回：如果 LLM 返回空字符串，降级使用原始 query
         final_query = rewritten if rewritten else query
-        logger.info("Query Rewrite 最终结果: %s", final_query)
+        logger.info("Query Rewrite 最终结果: len=%d, preview=%s", len(final_query), preview_text(final_query))
         return final_query
 
     except Exception as e:
         # Query Rewrite 失败不应阻断主流程，降级使用原始 query
         logger.warning("Query Rewrite 失败，降级使用原始 query: %s", e, exc_info=True)
-        logger.info("Query Rewrite 降级结果: %s", query)
+        logger.info("Query Rewrite 降级结果: len=%d, preview=%s", len(query), preview_text(query))
         return query

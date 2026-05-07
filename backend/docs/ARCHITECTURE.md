@@ -1,7 +1,7 @@
 # M-Flow RAG 后端系统架构设计文档 (MVP/Demo 阶段)
 
-**文档版本**: v1.5
-**更新日期**: 2026-04-30
+**文档版本**: v2.0
+**更新日期**: 2026-05-07
 **设计原则**: 最简可行产品 (MVP)，极简设计，高内聚低耦合
 
 ---
@@ -35,14 +35,15 @@ backend/
 │   ├── __init__.py
 │   ├── chat.py              # POST /api/chat 对话流式接口
 │   └── graph.py             # POST /api/graph/query 图谱数据接口
-├── core/                    # 全局单例与外部客户端初始化
+├── core/                    # 全局单例、配置与通用工具
 │   ├── __init__.py
 │   ├── config.py            # pydantic-settings BaseSettings 配置类（读取 .env 中的后端配置）
-│   └── llm.py               # 实例化基于 openai 包的 MiniMax 客户端单例
+│   ├── llm.py               # 实例化基于 openai 包的 MiniMax 客户端单例
+│   └── utils.py             # 通用工具函数（如日志预览文本裁剪）
 ├── db/                      # 数据库与持久化层
 │   ├── __init__.py
 │   ├── database.py          # SQLAlchemy 异步引擎 (AsyncEngine)、异步会话工厂 (async_session)、WAL 模式初始化
-│   └── models.py            # 数据表结构 (Session, Message 实体定义)
+│   └── models.py            # 数据表结构 (ChatSession, Message 实体定义)
 ├── schemas/                 # Pydantic 数据校验模型 (DTO)
 │   ├── __init__.py
 │   └── payloads.py          # 存放所有的 Request/Response 模型定义 (极简合并为一)
@@ -53,6 +54,8 @@ backend/
 │   └── mflow_client.py      # M-Flow 本地库的调用封装门面 (Facade)
 ├── requirements.txt         # 核心依赖清单 (fastapi, uvicorn, sqlalchemy, openai 等)
 ├── .env.example             # 环境变量模板
+├── tests/                   # 测试目录
+├── tools/                   # 开发辅助脚本（非运行时业务模块）
 └── README.md                # 项目简介
 ```
 
@@ -102,20 +105,20 @@ backend/
     *   **数据映射逻辑**:
         *   **`graphId`**: 由后端基于查询字符串的 Hash (如 SHA-256) 生成，确保同一查询在前端具有稳定的图谱标识。
         *   **`nodeType` 过滤与映射**: M-Flow 返回的 `type` 字段可能包含内置类型或原始数据类型。后端需执行：(1) 过滤掉 M-Flow 的内置系统节点类型；(2) 将剩余类型映射至 `API.md` 定义的 12 种标准业务类型（如 `artifact`, `dynasty`）；(3) 对于无法匹配的类型，统一降级为 `other` 标识。
-        *   **`centerNodeId`**: 由后端选取检索结果中权重最高或首个 `artifact` 类型节点的 ID 作为中心。
+        *   **`centerNodeId`**: 由后端优先选取首个 `artifact` 类型节点；若不存在 `artifact`，则降级选取结果中的首个节点。
         *   **`edges`**: 将 M-Flow 的关系转换为带唯一 ID（如 `f"{source}_{label}_{target}"`）的标准 `GraphEdge`。
 
 > **MiniMax 思维链标签处理**: MiniMax-M2.7 在推理时会输出 `<think>...</think>` 包裹的思维链内容。流式场景下思维链可能跨越多个 chunk，`chat_service.py` 使用布尔状态标记 `_in_think` 逐 chunk 追踪过滤；非流式场景（Query Rewrite）使用正则 `re.sub` 清理。消息落盘前也会做防御性正则清理。详见 `README.md` 中的兼容性问题说明。
 
 ### 3.3 数据模型设计 (`db/models.py`)
 采用 SQLAlchemy 声明式映射（Declarative Mapping），其优势在于将数据表结构与 Python 类一一对应，代码即文档，同时获得 IDE 的类型提示与自动补全支持：
-*   **`Session` 表**:
+*   **`ChatSession` 表**:
     *   `id`: String (主键，前端生成的 session_id)
     *   `user_id`: String (Nullable, **预留多租户字段** — 当前赋默认值，未来接入用户体系时可直接关联，无需变更表结构)
     *   `created_at`: DateTime
 *   **`Message` 表**:
     *   `id`: Integer (主键，自增)
-    *   `session_id`: String (外键关联 Session.id)
+    *   `session_id`: String (外键关联 ChatSession.id)
     *   `role`: String (枚举: "user" | "assistant")
     *   `content`: Text
     *   `created_at`: DateTime
@@ -223,6 +226,8 @@ client = AsyncOpenAI(
 *   **降时效果评估**：
     *   当日志量大（尤其逐字 SSE + 大结果对象）时，I/O 与字符串序列化成本会显著拖慢请求；收敛日志可带来稳定降时。
     *   在低日志量场景收益中等，但可明显降低控制台噪声与磁盘写放大。
+*   **当前现状（已落地）**：
+    *   `chat_service.py`、`graph_service.py`、`mflow_client.py` 已采用摘要日志策略（长度/数量/预览），不再在 INFO 级别输出大对象全文。
 
 ### 4.5 前端并发策略优化（调用编排）
 
@@ -245,13 +250,13 @@ client = AsyncOpenAI(
 
 ---
 
-## 5. 后续开发路径 (Next Steps)
+## 5. 当前实施现状与后续建议 (Current State & Next Steps)
 
-按照 MVP 原则，接下来的开发分为以下步骤执行：
+当前代码已完成 MVP 主链路落地（真实 M-Flow 接入、SSE 单字符流、图谱查询与 Query Rewrite 解耦、日志摘要化与检索参数收敛）。
 
-1.  **基础设施搭建**: 生成 `requirements.txt` 并创建项目基础目录骨架。编写 `db/database.py` 和 `core/config.py`，打通 SQLite 与环境变量。
-2.  **数据模型确立**: 完成 `db/models.py` 与 `schemas/payloads.py`，确保请求参数能被校验，聊天记录能被存储。
-3.  **核心 Service 联调**: 编写 `mflow_client.py` (使用 Mock 数据模拟 M-Flow) 与 `core/llm.py` (连通真实的 MiniMax 接口测试 Query Rewrite)。
-4.  **接口与流式组装**: 完成 `chat_service.py` 和 `api/chat.py` 的 SSE 协议支持，实现完整的问答闭环。
-5.  **图谱接口闭环**: 完成独立、解耦的 `/api/graph/query` 接口（含 Query Rewrite 逻辑）。
-6.  **替换 M-Flow Mock**: 最终接入真实的 M-Flow 本地 SDK 逻辑。
+后续建议聚焦于性能与工程化增强：
+
+1.  **缓存落地**：在 `services/mflow_client.py` 增加短 TTL 缓存，优先覆盖热点重复查询。
+2.  **检索策略分层**：按查询复杂度在 `EPISODIC` 与 `CHUNKS_LEXICAL` 间动态切换，平衡速度与质量。
+3.  **前端并发治理**：优化 `/api/chat` 与 `/api/graph/query` 的触发时机，减少资源争抢。
+4.  **可观测性增强**：在保持摘要日志的前提下补充统一耗时埋点（检索/重写/LLM 首包与总耗时）。

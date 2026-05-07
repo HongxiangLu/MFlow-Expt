@@ -14,6 +14,7 @@ import logging
 import os
 
 from dotenv import load_dotenv
+from core.utils import preview_text
 
 # 在导入 M-Flow SDK 之前加载 .env 环境变量
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
@@ -70,7 +71,8 @@ async def get_context(query: str) -> list[str]:
         wide_search_top_k=WIDE_SEARCH_TOP_K,
         display_mode=DISPLAY_MODE,
     )
-    logger.info("M-Flow context 原始返回: type=%s, value=%s", type(search_results), search_results)
+    raw_count = len(search_results) if isinstance(search_results, list) else 1
+    logger.info("M-Flow context 原始返回: type=%s, raw_count=%d", type(search_results), raw_count)
     
     context_list = []
     if isinstance(search_results, list):
@@ -91,7 +93,12 @@ async def get_context(query: str) -> list[str]:
             context_list = [str(search_results.context)]
     
     logger.info("M-Flow context 解析完成: query=%s, context_count=%d", query, len(context_list))
-    logger.info("M-Flow context 解析内容: %s", context_list)
+    if context_list:
+        logger.info(
+            "M-Flow context 预览: first_len=%d, first_preview=%s",
+            len(context_list[0]),
+            preview_text(context_list[0]),
+        )
     return context_list
 
 
@@ -144,7 +151,7 @@ async def get_graph(query: str) -> dict:
         wide_search_top_k=WIDE_SEARCH_TOP_K,
         display_mode=DISPLAY_MODE,
     )
-    logger.info("M-Flow graph 原始返回: type=%s, value=%s", type(search_result), search_result)
+    logger.info("M-Flow graph 原始返回: type=%s", type(search_result))
 
     nodes = []
     edges = []
@@ -157,7 +164,12 @@ async def get_graph(query: str) -> dict:
             if not isinstance(graph_data, dict):
                 logger.warning("跳过非 dict 图谱数据: dataset=%s, value=%s", dataset_name, graph_data)
                 continue
-            logger.info("处理图谱数据集: dataset=%s, graph_data=%s", dataset_name, graph_data)
+            logger.info(
+                "处理图谱数据集: dataset=%s, raw_nodes=%d, raw_edges=%d",
+                dataset_name,
+                len(graph_data.get("nodes", [])),
+                len(graph_data.get("edges", [])),
+            )
                 
             # 处理并转化节点 (Nodes)
             for node in graph_data.get("nodes", []):
@@ -176,7 +188,8 @@ async def get_graph(query: str) -> dict:
                     "label": node.get("label") or node.get("id"),
                     "nodeType": node_type
                 })
-                logger.info("图谱节点映射: raw=%s, mapped=%s", node, nodes[-1])
+                # 节点逐条映射日志容易刷屏，保留在 DEBUG 级别。
+                logger.debug("图谱节点映射: mapped=%s", nodes[-1])
             
             # 处理并转化边 (Edges)
             for edge in graph_data.get("edges", []):
@@ -195,7 +208,8 @@ async def get_graph(query: str) -> dict:
                     "label": label,
                     "weight": 1.0  # 默认权重
                 })
-                logger.info("图谱边映射: raw=%s, mapped=%s", edge, edges[-1])
+                # 边逐条映射日志容易刷屏，保留在 DEBUG 级别。
+                logger.debug("图谱边映射: mapped=%s", edges[-1])
 
     # 生成当前知识检索网络视图的全局唯一 ID
     # 相同 Query 将产生稳定的 graphId，有利于前端缓存或状态保持
@@ -226,5 +240,11 @@ async def get_graph(query: str) -> dict:
         len(nodes),
         len(edges),
     )
-    logger.info("M-Flow graph 最终结果: %s", result)
+    logger.info(
+        "M-Flow graph 结果摘要: graphId=%s, centerNodeId=%s, node_count=%d, edge_count=%d",
+        result["graphId"],
+        result["centerNodeId"],
+        len(result["nodes"]),
+        len(result["edges"]),
+    )
     return result
