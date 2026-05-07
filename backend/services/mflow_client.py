@@ -10,7 +10,9 @@ M-Flow RAG 引擎客户端适配器 (M-Flow Client Facade)
 """
 
 import hashlib
+import logging
 import os
+
 from dotenv import load_dotenv
 
 # 在导入 M-Flow SDK 之前加载 .env 环境变量
@@ -18,6 +20,8 @@ load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
 
 from m_flow import search as m_flow_search
 from m_flow import RecallMode
+
+logger = logging.getLogger(__name__)
 
 # 预定义的 12 种标准业务类型
 # 依据 API.md 的规范，前端对这 12 种类型的节点会进行特定样式的渲染。
@@ -46,7 +50,10 @@ async def get_context(query: str) -> list[str]:
     # 防御空查询：M-Flow SDK 对空白字符串会抛出 ValueError，
     # 在 Facade 层提前拦截，返回安全的空结果。
     if not query or not query.strip():
+        logger.info("M-Flow context 检索跳过：收到空查询。")
         return []
+
+    logger.info("M-Flow context 检索开始: query=%s", query)
 
     # 不再使用有 Bug 的 m_flow_query，改用底层 m_flow_search 直接获取
     search_results = await m_flow_search(
@@ -54,6 +61,7 @@ async def get_context(query: str) -> list[str]:
         query_type=RecallMode.EPISODIC,
         use_combined_context=False
     )
+    logger.info("M-Flow context 原始返回: type=%s, value=%s", type(search_results), search_results)
     
     context_list = []
     if isinstance(search_results, list):
@@ -72,8 +80,12 @@ async def get_context(query: str) -> list[str]:
             context_list = [str(ctx) for ctx in search_results.context]
         else:
             context_list = [str(search_results.context)]
-            
+    
+    logger.info("M-Flow context 解析完成: query=%s, context_count=%d", query, len(context_list))
+    logger.info("M-Flow context 解析内容: %s", context_list)
     return context_list
+
+
 async def get_graph(query: str) -> dict:
     """
     获取与用户提问相关的结构化知识图谱数据 (Knowledge Graph Data)。
@@ -102,12 +114,15 @@ async def get_graph(query: str) -> dict:
     # 防御空查询：M-Flow SDK 对空白字符串会抛出 ValueError，
     # 在 Facade 层提前拦截，返回符合契约的空图谱结构。
     if not query or not query.strip():
+        logger.info("M-Flow graph 检索跳过：收到空查询。")
         return {
             "graphId": hashlib.sha256(b"").hexdigest()[:16],
             "centerNodeId": "",
             "nodes": [],
             "edges": []
         }
+
+    logger.info("M-Flow graph 检索开始: query=%s", query)
 
     # 1. 调用 m_flow.search 获取带图形结构的聚合结果
     search_result = await m_flow_search(
@@ -116,6 +131,7 @@ async def get_graph(query: str) -> dict:
         verbose=True,  # 必须开启 verbose 才能带回 graphs 对象
         use_combined_context=True  # 必须开启组合上下文才能返回带有 graphs 的 CombinedSearchResult
     )
+    logger.info("M-Flow graph 原始返回: type=%s, value=%s", type(search_result), search_result)
 
     nodes = []
     edges = []
@@ -123,9 +139,12 @@ async def get_graph(query: str) -> dict:
     # 解析并提取 graphs 属性（需兼容防御：确保 search_result 有 graphs 属性）
     graphs_data = getattr(search_result, "graphs", None)
     if graphs_data:
+        logger.info("M-Flow graph 数据集 keys: %s", list(graphs_data.keys()))
         for dataset_name, graph_data in graphs_data.items():
             if not isinstance(graph_data, dict):
+                logger.warning("跳过非 dict 图谱数据: dataset=%s, value=%s", dataset_name, graph_data)
                 continue
+            logger.info("处理图谱数据集: dataset=%s, graph_data=%s", dataset_name, graph_data)
                 
             # 处理并转化节点 (Nodes)
             for node in graph_data.get("nodes", []):
@@ -144,6 +163,7 @@ async def get_graph(query: str) -> dict:
                     "label": node.get("label") or node.get("id"),
                     "nodeType": node_type
                 })
+                logger.info("图谱节点映射: raw=%s, mapped=%s", node, nodes[-1])
             
             # 处理并转化边 (Edges)
             for edge in graph_data.get("edges", []):
@@ -162,6 +182,7 @@ async def get_graph(query: str) -> dict:
                     "label": label,
                     "weight": 1.0  # 默认权重
                 })
+                logger.info("图谱边映射: raw=%s, mapped=%s", edge, edges[-1])
 
     # 生成当前知识检索网络视图的全局唯一 ID
     # 相同 Query 将产生稳定的 graphId，有利于前端缓存或状态保持
@@ -178,9 +199,19 @@ async def get_graph(query: str) -> dict:
         else:
             center_node_id = nodes[0]["id"]
 
-    return {
+    result = {
         "graphId": graph_id,
         "centerNodeId": center_node_id,
         "nodes": nodes,
         "edges": edges
     }
+    logger.info(
+        "M-Flow graph 解析完成: query=%s, graphId=%s, centerNodeId=%s, node_count=%d, edge_count=%d",
+        query,
+        graph_id,
+        center_node_id,
+        len(nodes),
+        len(edges),
+    )
+    logger.info("M-Flow graph 最终结果: %s", result)
+    return result

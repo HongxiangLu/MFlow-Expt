@@ -49,6 +49,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="M-Flow RAG Backend", lifespan=lifespan)
+logger.info("FastAPI 应用初始化完成: title=%s", app.title)
 
 app.add_middleware(
     CORSMiddleware,
@@ -57,13 +58,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+logger.info(
+    "CORS 中间件已注册: allow_origins=%s, allow_credentials=%s, allow_methods=%s, allow_headers=%s",
+    ["*"],
+    False,
+    ["*"],
+    ["*"],
+)
 
 app.include_router(chat_router)
 app.include_router(graph_router)
+logger.info("业务路由挂载完成: routers=[chat, graph]")
 
 
 if __name__ == "__main__":
     # 标准启动入口，读取配置中心的 Host 与 Port
+    logger.info(
+        "通过 __main__ 启动 Uvicorn: host=%s, port=%s, reload=%s",
+        settings.APP_HOST,
+        settings.APP_PORT,
+        True,
+    )
     uvicorn.run(
         "main:app",
         host=settings.APP_HOST,

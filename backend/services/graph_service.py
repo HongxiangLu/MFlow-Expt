@@ -55,6 +55,7 @@ async def query_graph(query: str, session_id: str, db: AsyncSession) -> GraphRes
     Raises:
         HTTPException(404): 当 M-Flow 图谱检索返回空结果时抛出。
     """
+    logger.info("图谱查询开始: session_id=%s, query=%s", session_id, query)
 
     # =================================================================
     # Step 1: 查询历史消息
@@ -65,6 +66,11 @@ async def query_graph(query: str, session_id: str, db: AsyncSession) -> GraphRes
         .order_by(Message.created_at.asc())
     )
     history_messages = result.scalars().all()
+    logger.info("图谱查询历史消息: session_id=%s, history_count=%d", session_id, len(history_messages))
+    logger.info(
+        "图谱查询历史消息内容: %s",
+        [{"role": msg.role, "content": msg.content} for msg in history_messages],
+    )
 
     # =================================================================
     # Step 2: Query Rewrite 跳过策略
@@ -86,12 +92,14 @@ async def query_graph(query: str, session_id: str, db: AsyncSession) -> GraphRes
     # Step 3: 图谱检索
     # =================================================================
     graph_data = await mflow_client.get_graph(rewritten_query)
+    logger.info("M-Flow 图谱检索结果: %s", graph_data)
 
     # =================================================================
     # Step 4: 空结果处理
     # =================================================================
     # 按 API.md §1.5.3：图谱检索空结果返回 HTTP 404
     if not graph_data.get("nodes"):
+        logger.info("图谱检索为空，抛出 404: session_id=%s, rewritten_query=%s", session_id, rewritten_query)
         raise HTTPException(
             status_code=404,
             detail="未检索到与当前提问相关的知识图谱数据，请尝试更换提问内容。"
@@ -100,12 +108,22 @@ async def query_graph(query: str, session_id: str, db: AsyncSession) -> GraphRes
     # =================================================================
     # Step 5: 构建并返回 GraphResponse
     # =================================================================
-    return GraphResponse(
+    response = GraphResponse(
         graphId=graph_data["graphId"],
         centerNodeId=graph_data["centerNodeId"],
         nodes=[GraphNode(**node) for node in graph_data["nodes"]],
         edges=[GraphEdge(**edge) for edge in graph_data["edges"]],
     )
+    logger.info(
+        "图谱查询返回: session_id=%s, graphId=%s, centerNodeId=%s, node_count=%d, edge_count=%d",
+        session_id,
+        response.graphId,
+        response.centerNodeId,
+        len(response.nodes),
+        len(response.edges),
+    )
+    logger.info("图谱查询响应体: %s", response.model_dump())
+    return response
 
 
 async def _rewrite_query(query: str, history_messages: list[Message]) -> str:
@@ -129,6 +147,8 @@ async def _rewrite_query(query: str, history_messages: list[Message]) -> str:
         messages.append({"role": msg.role, "content": msg.content})
 
     messages.append({"role": "user", "content": query})
+    logger.info("即将请求 MiniMax 执行 Query Rewrite: model=%s", settings.MINIMAX_MODEL)
+    logger.info("Query Rewrite 请求 messages: %s", messages)
 
     try:
         response = await llm_client.chat.completions.create(
@@ -136,16 +156,21 @@ async def _rewrite_query(query: str, history_messages: list[Message]) -> str:
             messages=messages,
             stream=False,
         )
+        logger.info("Query Rewrite 原始响应: %s", response)
 
         rewritten = response.choices[0].message.content.strip()
+        logger.info("Query Rewrite 原始文本: %s", rewritten)
 
         # 清理 MiniMax 模型可能输出的 <think>...</think> 思维链标签
         rewritten = re.sub(r"<think>.*?</think>", "", rewritten, flags=re.DOTALL).strip()
 
         # 防御空返回：如果 LLM 返回空字符串，降级使用原始 query
-        return rewritten if rewritten else query
+        final_query = rewritten if rewritten else query
+        logger.info("Query Rewrite 最终结果: %s", final_query)
+        return final_query
 
     except Exception as e:
         # Query Rewrite 失败不应阻断主流程，降级使用原始 query
         logger.warning("Query Rewrite 失败，降级使用原始 query: %s", e, exc_info=True)
+        logger.info("Query Rewrite 降级结果: %s", query)
         return query

@@ -11,6 +11,8 @@
 - 所有业务规则统一沉淀在 service 层，便于测试和复用。
 """
 
+import logging
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +20,7 @@ from db.database import get_db
 from schemas.payloads import GraphRequest, GraphResponse
 from services import graph_service
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["graph"])
 
 
@@ -37,4 +40,13 @@ async def graph_query(req: GraphRequest, db: AsyncSession = Depends(get_db)) -> 
     - `response_model=GraphResponse` 用于响应结构约束与 OpenAPI 文档生成。
     - 异常（如检索空结果的 404）由 service 层抛出并交给 FastAPI 统一处理。
     """
-    return await graph_service.query_graph(req.query, req.session_id, db)
+    logger.info("收到 /api/graph/query 请求: %s", req.model_dump_json())
+    response = await graph_service.query_graph(req.query, req.session_id, db)
+    logger.info(
+        "图谱查询完成: session_id=%s, graphId=%s, nodes=%d, edges=%d",
+        req.session_id,
+        response.graphId,
+        len(response.nodes),
+        len(response.edges),
+    )
+    return response

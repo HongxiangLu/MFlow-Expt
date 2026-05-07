@@ -61,6 +61,7 @@ async def stream_chat(query: str, session_id: str, db: AsyncSession):
     Yields:
         dict: 包含 "event" 和 "data" 键的字典，符合 sse-starlette 的消费格式。
     """
+    logger.info("对话流开始: session_id=%s, query=%s", session_id, query)
 
     # =================================================================
     # Step 1: 获取/创建 Session + 查询历史消息
@@ -70,6 +71,9 @@ async def stream_chat(query: str, session_id: str, db: AsyncSession):
         session = ChatSession(id=session_id)
         db.add(session)
         await db.commit()
+        logger.info("已创建新会话: session_id=%s", session_id)
+    else:
+        logger.info("复用已有会话: session_id=%s", session_id)
 
     # 查询该 session 下所有历史消息，按创建时间升序排列
     # 不设轮数与 Token 上限（遵循 REQUIREMENTS.md §2 接口A 的设计决策）
@@ -79,20 +83,29 @@ async def stream_chat(query: str, session_id: str, db: AsyncSession):
         .order_by(Message.created_at.asc())
     )
     history_messages = result.scalars().all()
+    logger.info("历史消息查询完成: session_id=%s, history_count=%d", session_id, len(history_messages))
+    logger.info(
+        "历史消息内容: %s",
+        [{"role": msg.role, "content": msg.content} for msg in history_messages],
+    )
 
     # =================================================================
     # Step 2: RAG 知识检索
     # =================================================================
     try:
         context_list = await mflow_client.get_context(query)
+        logger.info("M-Flow context 获取成功: session_id=%s, context_count=%d", session_id, len(context_list))
+        logger.info("M-Flow context 内容: %s", context_list)
     except Exception as e:
         logger.error("M-Flow 检索异常: %s", e, exc_info=True)
+        error_payload = SSEError(
+            code="retrieval_error",
+            message="知识检索服务异常，请稍后重试"
+        ).model_dump_json()
+        logger.info("发送 SSE 错误帧: event=error, data=%s", error_payload)
         yield {
             "event": "error",
-            "data": SSEError(
-                code="retrieval_error",
-                message="知识检索服务异常，请稍后重试"
-            ).model_dump_json(),
+            "data": error_payload,
         }
         return
 
@@ -102,12 +115,14 @@ async def stream_chat(query: str, session_id: str, db: AsyncSession):
     # 若上下文为空，不调用 LLM，直接推送降级提示信息
     # 通过正常的 data 帧发送（finish_reason="stop"），前端无需额外解析逻辑
     if not context_list:
+        fallback_payload = ChatChunk(
+            chunk=FALLBACK_MESSAGE,
+            finish_reason="stop"
+        ).model_dump_json()
+        logger.info("检索为空，发送降级帧: event=message, data=%s", fallback_payload)
         yield {
             "event": "message",
-            "data": ChatChunk(
-                chunk=FALLBACK_MESSAGE,
-                finish_reason="stop"
-            ).model_dump_json(),
+            "data": fallback_payload,
         }
         return
 
@@ -128,6 +143,8 @@ async def stream_chat(query: str, session_id: str, db: AsyncSession):
 
     # 追加当前用户提问
     messages.append({"role": "user", "content": query})
+    logger.info("即将请求 MiniMax（stream=True）: model=%s", settings.MINIMAX_MODEL)
+    logger.info("MiniMax 请求 messages: %s", messages)
 
     # =================================================================
     # Step 5: LLM 流式调用 + SSE 推送
@@ -141,85 +158,103 @@ async def stream_chat(query: str, session_id: str, db: AsyncSession):
             messages=messages,
             stream=True,
         )
+        logger.info("MiniMax 流式连接建立成功: session_id=%s", session_id)
 
         async for chunk in stream:
             # 提取增量文本内容
             delta = chunk.choices[0].delta if chunk.choices else None
             if delta and delta.content:
                 text = delta.content
+                logger.info("收到 MiniMax 原始增量: %s", text)
 
                 # 过滤 MiniMax 模型的 <think>...</think> 思维链输出
                 # 思维链可能跨多个 chunk，需要用状态标记追踪
                 if "<think>" in text:
                     _in_think = True
+                    logger.info("检测到 <think> 起始标签，进入过滤模式")
                 if _in_think:
                     if "</think>" in text:
                         _in_think = False
                         # 提取 </think> 之后的有效内容
                         text = text.split("</think>", 1)[1]
+                        logger.info("检测到 </think> 结束标签，恢复输出模式。标签后内容=%s", text)
                     else:
+                        logger.info("当前增量位于 <think> 区间内，跳过输出")
                         continue  # 仍在 think 标签内，跳过此 chunk
 
                 if text:  # 过滤后仍有有效内容
                     full_answer += text
+                    message_payload = ChatChunk(
+                        chunk=text,
+                        finish_reason=None
+                    ).model_dump_json()
+                    logger.info("发送 SSE 消息帧: event=message, data=%s", message_payload)
                     yield {
                         "event": "message",
-                        "data": ChatChunk(
-                            chunk=text,
-                            finish_reason=None
-                        ).model_dump_json(),
+                        "data": message_payload,
                     }
 
         # 流结束：发送终止帧
+        stop_payload = ChatChunk(
+            chunk="",
+            finish_reason="stop"
+        ).model_dump_json()
+        logger.info("发送 SSE 结束帧: event=message, data=%s", stop_payload)
         yield {
             "event": "message",
-            "data": ChatChunk(
-                chunk="",
-                finish_reason="stop"
-            ).model_dump_json(),
+            "data": stop_payload,
         }
+        logger.info("MiniMax 流式输出结束: session_id=%s, answer_length=%d", session_id, len(full_answer))
 
     except openai.APITimeoutError:
         logger.error("LLM 调用超时")
+        timeout_payload = SSEError(
+            code="llm_timeout",
+            message="大模型响应超时，请稍后重试"
+        ).model_dump_json()
+        logger.info("发送 SSE 错误帧: event=error, data=%s", timeout_payload)
         yield {
             "event": "error",
-            "data": SSEError(
-                code="llm_timeout",
-                message="大模型响应超时，请稍后重试"
-            ).model_dump_json(),
+            "data": timeout_payload,
         }
         return
 
     except openai.RateLimitError:
         logger.error("LLM 调用限流")
+        rate_limit_payload = SSEError(
+            code="llm_rate_limit",
+            message="大模型调用频率受限，请稍后重试"
+        ).model_dump_json()
+        logger.info("发送 SSE 错误帧: event=error, data=%s", rate_limit_payload)
         yield {
             "event": "error",
-            "data": SSEError(
-                code="llm_rate_limit",
-                message="大模型调用频率受限，请稍后重试"
-            ).model_dump_json(),
+            "data": rate_limit_payload,
         }
         return
 
     except openai.APIError as e:
         logger.error("LLM API 错误: %s", e, exc_info=True)
+        llm_error_payload = SSEError(
+            code="llm_error",
+            message="大模型服务异常，请稍后重试"
+        ).model_dump_json()
+        logger.info("发送 SSE 错误帧: event=error, data=%s", llm_error_payload)
         yield {
             "event": "error",
-            "data": SSEError(
-                code="llm_error",
-                message="大模型服务异常，请稍后重试"
-            ).model_dump_json(),
+            "data": llm_error_payload,
         }
         return
 
     except Exception as e:
         logger.error("对话服务未知错误: %s", e, exc_info=True)
+        internal_error_payload = SSEError(
+            code="internal_error",
+            message="后端内部错误，请稍后重试"
+        ).model_dump_json()
+        logger.info("发送 SSE 错误帧: event=error, data=%s", internal_error_payload)
         yield {
             "event": "error",
-            "data": SSEError(
-                code="internal_error",
-                message="后端内部错误，请稍后重试"
-            ).model_dump_json(),
+            "data": internal_error_payload,
         }
         return
 
@@ -230,6 +265,9 @@ async def stream_chat(query: str, session_id: str, db: AsyncSession):
     # 即使 full_answer 为空（极端情况），也照常落盘以保持历史完整性
     # 清理落盘内容中可能残留的 <think> 标签（防御性处理）
     clean_answer = re.sub(r"<think>.*?</think>", "", full_answer, flags=re.DOTALL).strip()
+    logger.info("准备落盘用户消息: session_id=%s, role=user, content=%s", session_id, query)
+    logger.info("准备落盘助手消息: session_id=%s, role=assistant, content=%s", session_id, clean_answer)
     db.add(Message(session_id=session_id, role="user", content=query))
     db.add(Message(session_id=session_id, role="assistant", content=clean_answer))
     await db.commit()
+    logger.info("对话消息落盘完成: session_id=%s", session_id)

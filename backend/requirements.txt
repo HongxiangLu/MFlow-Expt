@@ -2,3 +2,5 @@
 
 # GitHub Release 最新版本
 mflow-ai==0.3.4
+
+sse_starlette

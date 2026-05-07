@@ -11,6 +11,8 @@
 - 仅做协议层转换与参数传递，保持“薄路由”。
 """
 
+import logging
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
@@ -19,6 +21,7 @@ from db.database import get_db
 from schemas.payloads import ChatRequest
 from services import chat_service
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["chat"])
 
 
@@ -39,7 +42,10 @@ async def chat(req: ChatRequest, db: AsyncSession = Depends(get_db)) -> EventSou
     - 该接口返回后连接会保持打开，直到服务端发送结束帧或错误事件。
     - media_type 明确声明为 `text/event-stream`，确保客户端按 SSE 协议解析。
     """
-    return EventSourceResponse(
+    logger.info("收到 /api/chat 请求: %s", req.model_dump_json())
+    response = EventSourceResponse(
         chat_service.stream_chat(req.query, req.session_id, db),
         media_type="text/event-stream",
     )
+    logger.info("已创建 /api/chat SSE 响应对象: session_id=%s", req.session_id)
+    return response

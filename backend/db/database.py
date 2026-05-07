@@ -3,21 +3,27 @@
 该模块负责初始化 SQLAlchemy 异步引擎、配置 SQLite 运行参数以及创建异步会话工厂。
 """
 
-from collections.abc import AsyncGenerator
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy import event
-from core.config import settings
+import logging
 import os
+from collections.abc import AsyncGenerator
+from sqlalchemy import event
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from core.config import settings
+
+logger = logging.getLogger(__name__)
 
 # 确保数据库所在的目录存在，避免 SQLite 报 unable to open database file 错误
 db_dir = os.path.dirname(settings.BACKEND_DB_PATH)
 if db_dir and not os.path.exists(db_dir):
     os.makedirs(db_dir, exist_ok=True)
+    logger.info("已创建数据库目录: %s", db_dir)
 
 # 创建异步数据库引擎
 # 采用 sqlite+aiosqlite 驱动以支持全链路异步操作，避免同步 IO 阻塞事件循环
 # settings.BACKEND_DB_PATH 从环境变量或默认配置中读取
 engine = create_async_engine(f"sqlite+aiosqlite:///{settings.BACKEND_DB_PATH}")
+logger.info("数据库引擎已初始化: sqlite+aiosqlite:///%s", settings.BACKEND_DB_PATH)
 
 # =================================================================
 # SQLite 性能与并发配置 (WAL 模式)
@@ -35,6 +41,7 @@ def _set_wal(dbapi_conn, _):
     cursor = dbapi_conn.cursor()
     cursor.execute("PRAGMA journal_mode=WAL")
     cursor.close()
+    logger.info("SQLite 连接已启用 WAL 模式")
 
 # 创建异步会话工厂 (Session Factory)
 # expire_on_commit=False 确保在 commit 后对象不会立即失效，方便在异步环境中使用
@@ -47,4 +54,8 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     每个请求创建独立 AsyncSession，并在请求结束后自动释放。
     """
     async with async_session() as session:
-        yield session
+        logger.info("创建数据库会话: session_obj_id=%s", id(session))
+        try:
+            yield session
+        finally:
+            logger.info("释放数据库会话: session_obj_id=%s", id(session))
