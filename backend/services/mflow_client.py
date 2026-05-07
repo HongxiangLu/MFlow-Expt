@@ -10,7 +10,12 @@ M-Flow RAG 引擎客户端适配器 (M-Flow Client Facade)
 """
 
 import hashlib
-from m_flow import query as m_flow_query
+import os
+from dotenv import load_dotenv
+
+# 在导入 M-Flow SDK 之前加载 .env 环境变量
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
+
 from m_flow import search as m_flow_search
 from m_flow import RecallMode
 
@@ -38,6 +43,11 @@ async def get_context(query: str) -> list[str]:
     Raises:
         Exception: 捕获到底层 M-Flow 或 LLM 抛出的网络与权限异常，需由上层路由统一处理。
     """
+    # 防御空查询：M-Flow SDK 对空白字符串会抛出 ValueError，
+    # 在 Facade 层提前拦截，返回安全的空结果。
+    if not query or not query.strip():
+        return []
+
     # 不再使用有 Bug 的 m_flow_query，改用底层 m_flow_search 直接获取
     search_results = await m_flow_search(
         query_text=query,
@@ -89,6 +99,16 @@ async def get_graph(query: str) -> dict:
     Raises:
         Exception: 底层图谱查询失败时可能抛出的异常。
     """
+    # 防御空查询：M-Flow SDK 对空白字符串会抛出 ValueError，
+    # 在 Facade 层提前拦截，返回符合契约的空图谱结构。
+    if not query or not query.strip():
+        return {
+            "graphId": hashlib.sha256(b"").hexdigest()[:16],
+            "centerNodeId": "",
+            "nodes": [],
+            "edges": []
+        }
+
     # 1. 调用 m_flow.search 获取带图形结构的聚合结果
     search_result = await m_flow_search(
         query_text=query,

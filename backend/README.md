@@ -226,7 +226,7 @@ url = f"https://github.com/FlowElement-ai/m_flow/archive/refs/tags/v{clean}.zip"
 **1. 修改时间解析器**
 
 *   **文件路径**：`项目环境路径\Lib\site-packages\m_flow\retrieval\time\query_time_parser.py`
-*   **修改点**：定位到约第 992 行，改用 `timedelta` 计算偏移量以兼容负数时间戳。
+*   **修改点**：定位到第 992 行，改用 `timedelta` 计算偏移量以兼容负数时间戳。
 
 ```python
 # 修改前
@@ -240,7 +240,7 @@ now_dt = datetime(1970, 1, 1, tzinfo=timezone.utc) + timedelta(seconds=now_ms / 
 **2. 修改时间提取器（防御性修正）**
 
 *   **文件路径**：`项目环境路径\Lib\site-packages\m_flow\retrieval\time\mentioned_time_extractor.py`
-*   **修改点**：定位到约第 127 行，避免直接调用 `.timestamp()`。
+*   **修改点**：定位到第 127 行，避免直接调用 `.timestamp()`。
 
 ```python
 # 修改前
@@ -249,3 +249,54 @@ ts_ms = int(dt.timestamp() * 1000)
 # 修改后 (兼容 Windows 负数时间戳)
 ts_ms = int((dt - datetime(1970, 1, 1, tzinfo=timezone.utc)).total_seconds() * 1000)
 ```
+
+# 项目数据迁移的注意事项
+
+将项目目录迁移至其他盘符（如从 `C:\` 移动到 `D:\`）后，调用 `m_flow.search()` 进行向量检索时可能出现以下现象：
+
+- 检索日志显示 `total_hits=0, unique_ids=0`，或直接报告 `Searching an empty knowledge graph`
+- 知识库中已有导入数据，但 LLM 回复类似「The provided context does not contain any information about ...」
+- 向量数据库文件（`.lance.db` 目录）实际存在且包含完整的嵌入集合
+
+## 报错原因
+
+M-Flow 在首次 `memorize()` 入库时，会将数据集对应的向量数据库路径以**绝对路径**写入关系型数据库（SQLite）中的 `dataset_database` 表的 `vector_database_url` 字段。
+
+```
+# 示例：写入时项目在 C: 盘
+C:\Files\Codes\M-Flow\backend\.runtime\system\databases\{user_id}\{dataset_id}.lance.db
+```
+
+当项目目录被移动到另一个盘符后，该绝对路径变为过期路径。M-Flow 的 `set_db_context()` 方法在检索时会直接使用该路径打开 LanceDB 连接。如果旧盘符路径仍然可达但已不包含实际数据，LanceDB 会静默地打开一个空目录并返回 0 条结果，而不会报错。
+
+> **注意**：检索日志中的 `Multi-user access control is enabled...` 警告是 M-Flow 无条件输出的，**不代表**多用户隔离实际生效，也不是此问题的直接原因。请勿通过设置 `ENABLE_BACKEND_ACCESS_CONTROL=false` 来尝试解决此问题——如果数据是在 ACL 模式下导入的，关闭 ACL 反而会导致搜索指向空的根级数据库。
+
+## 诊断方法
+
+检查 `dataset_database` 表中存储的路径是否与当前项目实际路径一致：
+
+```bash
+cd backend
+python -c "import sqlite3; conn = sqlite3.connect(r'.runtime\system\databases\experiment_mflow'); print(conn.cursor().execute('SELECT vector_database_url FROM dataset_database').fetchall()); conn.close()"
+```
+
+如果输出的盘符或目录路径与实际不符，即可确认此问题。
+
+## 解决方案
+
+执行以下命令，将 `vector_database_url` 中的旧盘符替换为当前盘符（以 `C:\` → `D:\` 为例）：
+
+```bash
+cd backend
+python -c "
+import sqlite3
+conn = sqlite3.connect(r'.runtime\system\databases\experiment_mflow')
+cur = conn.cursor()
+cur.execute(\"UPDATE dataset_database SET vector_database_url = REPLACE(vector_database_url, 'C:\\\\', 'D:\\\\')\")
+conn.commit()
+print('Updated', cur.rowcount, 'row(s)')
+conn.close()
+"
+```
+
+修改完成后重新运行检索测试，向量搜索应能正常命中知识库中的数据。
