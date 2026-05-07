@@ -3,7 +3,8 @@
 该模块负责初始化 SQLAlchemy 异步引擎、配置 SQLite 运行参数以及创建异步会话工厂。
 """
 
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from collections.abc import AsyncGenerator
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy import event
 from core.config import settings
 import os
@@ -38,3 +39,12 @@ def _set_wal(dbapi_conn, _):
 # 创建异步会话工厂 (Session Factory)
 # expire_on_commit=False 确保在 commit 后对象不会立即失效，方便在异步环境中使用
 async_session = async_sessionmaker(engine, expire_on_commit=False)
+
+
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    """
+    FastAPI 依赖注入用的数据库会话提供器。
+    每个请求创建独立 AsyncSession，并在请求结束后自动释放。
+    """
+    async with async_session() as session:
+        yield session

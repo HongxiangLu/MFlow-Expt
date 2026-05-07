@@ -25,7 +25,7 @@
 
 ### 1.3 跨域与请求头
 
-*   所有接口默认支持 **CORS 跨域请求**。由于前端（通常运行于 `localhost:3000` 或移动端 WebView）与后端（`localhost:8000`）分属不同源，浏览器同源策略会拦截跨域请求，因此后端必须通过 FastAPI 的 `CORSMiddleware` 显式开放跨域访问。
+*   所有接口默认支持 **CORS 跨域请求**。由于前端（通常运行于 `localhost:3000` 或移动端 WebView）与后端（`localhost:8000`）分属不同源，浏览器同源策略会拦截跨域请求，因此后端必须通过 FastAPI 的 `CORSMiddleware` 显式开放跨域访问。**当前 MVP 实现采用 `allow_origins=["*"]` + `allow_credentials=False`**，以优先满足联调效率；生产阶段再切换为白名单域名。
 *   请求体默认为 `application/json`，编码格式必须为 `UTF-8`。JSON 作为请求/响应的标准序列化格式，具有最广泛的平台兼容性，且与 FastAPI 的 Pydantic 验证层无缝集成。
 
 ### 1.4 会话管理策略 (Session Lifecycle)

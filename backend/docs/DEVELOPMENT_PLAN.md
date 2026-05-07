@@ -299,7 +299,7 @@ async def query_graph(query: str, session_id: str, db: AsyncSession) -> GraphRes
 
 | 文件 | 职责 |
 |:---|:---|
-| `api/chat.py` | `POST /api/chat` → SSE StreamingResponse |
+| `api/chat.py` | `POST /api/chat` → SSE EventSourceResponse |
 | `api/graph.py` | `POST /api/graph/query` → JSON Response |
 
 ### `api/chat.py`
@@ -366,7 +366,12 @@ app.include_router(graph_router)
 ### 验证方式
 
 ```bash
+# 方法 1：直接运行 Python 脚本 (推荐)
+python main.py
+
+# 方法 2：使用 uvicorn 命令行
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
 # 访问 http://localhost:8000/docs 查看 Swagger 文档
 ```
 
@@ -401,9 +406,3 @@ config    database   llm/mflow   services   routers    main.py   e2e test
 
 > **每个 Phase 完成后都应独立验证**，确认该层的输入输出契约正确后再进入下一层。这样做的好处是：当上层出现 Bug 时，可以确信问题出在当前层而非底层依赖。
 
-## Open Questions
-
-> 以下 3 个问题不阻塞 Phase 1-3，但需在 Phase 6 前确认：
-> 1. **CORS**: MVP 阶段是否 `allow_origins=["*"]`？
-> 2. **Uvicorn**: 是否固定 `0.0.0.0:8000` + `--reload`？
-> 3. **日志**: 是否引入 `loguru`，还是标准 `logging` 即可？

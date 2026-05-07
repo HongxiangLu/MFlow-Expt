@@ -15,9 +15,12 @@
 *   **大语言模型集成**: 直接使用官方 `openai` Python 包，通过修改 `base_url` 接入 MiniMax-M2.7，实现最简 API 调用。之所以复用 OpenAI SDK 而非 MiniMax 专属 SDK，是为了将模型供应商锁定风险降至最低——未来切换模型时只需修改 `base_url` 与 `api_key`，业务代码无需变动。
 *   **RAG 引擎 (M-Flow)**: 作为本地 Python 库（Library）直接 `import` 并在当前进程中调用，不作为独立的微服务运行。此决策的理由是：MVP 阶段为单机部署，进程内调用可消除网络序列化与反序列化开销，同时避免引入服务编排（Docker Compose / K8s）的运维复杂度。
 *   **数据库与 ORM**: SQLite + **SQLAlchemy (异步模式)** + **aiosqlite**。SQLite 作为嵌入式数据库可零配置启动，适合 MVP 阶段的快速验证；SQLAlchemy 作为业界标准的 ORM 框架，其数据库抽象层保障了未来向 MySQL/PostgreSQL 的平滑迁移，核心业务代码无需修改。采用 `aiosqlite` 异步驱动而非同步 `sqlite3`，原因见下方「异步策略」。数据库初始化时默认启用 **WAL 模式**（`PRAGMA journal_mode=WAL`），使得读写操作可以并发执行（读不阻塞写、写不阻塞读），避免前端并发调用 `/api/chat`（写入）和 `/api/graph/query`（读取）时触发 `database is locked` 错误。
-*   **异步策略**: 全链路采用 **`async def` 路由 + `aiosqlite` 异步数据库驱动**。选择此组合的原因是：(1) Chat 接口的 SSE 流式推送（`StreamingResponse` + 异步生成器）和 LLM 调用（`AsyncOpenAI` 的异步迭代器）都强依赖 `async def` 路由；(2) 一旦使用 `async def`，同步数据库调用会阻塞事件循环，冻结所有并发请求，因此必须配合异步数据库驱动；(3) `aiosqlite` 内部使用独立线程执行 SQLite 操作并通过 async/await 暴露给事件循环，在等待 SQLite 文件锁释放时不阻塞其他协程；(4) 未来迁移 PostgreSQL 时，只需更换 `create_async_engine` 的 URL 和驱动（如 `asyncpg`），`AsyncSession` 的业务代码无需改动。
+*   **异步策略**: 全链路采用 **`async def` 路由 + `aiosqlite` 异步数据库驱动**。选择此组合的原因是：(1) Chat 接口的 SSE 流式推送（`EventSourceResponse` + 异步生成器）和 LLM 调用（`AsyncOpenAI` 的异步迭代器）都强依赖 `async def` 路由；(2) 一旦使用 `async def`，同步数据库调用会阻塞事件循环，冻结所有并发请求，因此必须配合异步数据库驱动；(3) `aiosqlite` 内部使用独立线程执行 SQLite 操作并通过 async/await 暴露给事件循环，在等待 SQLite 文件锁释放时不阻塞其他协程；(4) 未来迁移 PostgreSQL 时，只需更换 `create_async_engine` 的 URL 和驱动（如 `asyncpg`），`AsyncSession` 的业务代码无需改动。
 *   **配置管理**: 采用**单个 `.env` 文件**统一存放所有配置（通过注释分区区分 M-Flow 配置与后端配置）。后端自身的配置通过 **`pydantic-settings`** 的 `BaseSettings` 类管理，M-Flow 继续通过 `python-dotenv` 的 `load_dotenv()` 读取同一文件。之所以后端使用 `pydantic-settings` 而非 `python-dotenv`，是因为：(1) 它提供强类型校验，字段声明为 `int`/`bool`/`str` 后自动转换，启动时即报错而非运行时崩溃；(2) 所有配置集中在一个 `Settings` 类中，具备完整的 IDE 类型提示与自动补全；(3) 这是 FastAPI 官方文档推荐的配置管理最佳实践。之所以不拆分为多个 `.env` 文件，是因为：`BaseSettings` 默认读取 `.env`，与 M-Flow 的 `load_dotenv()` 行为完全兼容，单文件更简单且避免了多文件间同步配置的风险。
 *   **Query Rewrite 策略**: Query Rewrite **仅用于图谱查询接口** (`/api/graph/query`)。对话接口 (`/api/chat`) 不执行 Query Rewrite，因为对话接口会将完整的多轮历史连同当前提问一起发送给 LLM，模型本身具备从上下文中理解指代关系的能力。两个接口彻底解耦，互不干涉。
+*   **CORS 策略（MVP）**: 当前阶段统一采用 `allow_origins=["*"]` 放开跨域，优先保证前后端联调效率；同时设置 `allow_credentials=False`，降低开放跨域下的凭据风险。生产阶段再收敛为白名单域名。
+*   **Uvicorn 启动约定（开发环境）**: 固定使用 `uvicorn main:app --reload --host 0.0.0.0 --port 8000`，确保本机与局域网调试入口一致，并保留热重载能力。
+*   **日志策略（MVP）**: 统一采用 Python 标准库 `logging`，当前不引入 `loguru` 等第三方日志框架，避免在验证期增加额外依赖与迁移成本。
 
 ---
 
@@ -127,7 +130,7 @@ from core.config import settings
 # 全局异步客户端单例
 client = AsyncOpenAI(
     api_key=settings.MINIMAX_API_KEY,
-    base_url="https://api.minimax.chat/v1" # 依据实际开放平台地址配置
+    base_url=settings.MINIMAX_BASE_URL  # 统一由配置中心管理
 )
 ```
 
