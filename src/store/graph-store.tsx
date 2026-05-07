@@ -53,6 +53,12 @@ const nodeTypeColorMap: Record<string, string> = {
   other: '#71717b',
 }
 
+const edgeLabelMap: Record<string, string> = {
+  involves_entity: '涉及实体',
+  has_facet: '包含方面',
+  has_point: '包含要点',
+}
+
 const useKnowledgeGraphStore = create<KnowledgeGraphStore>((set) => ({
   graphResponse: null,
   status: 'idle',
@@ -74,6 +80,10 @@ function getNodeSize(nodeType: GraphNodeType, isCenterNode: boolean, degree: num
   }
 
   return Math.min(14, 9 + degree)
+}
+
+function getEdgeLabel(label: string) {
+  return edgeLabelMap[label] ?? label
 }
 
 function buildGraph(graphResponse: GraphResponse | null) {
@@ -110,7 +120,7 @@ function buildGraph(graphResponse: GraphResponse | null) {
     const weight = edge.weight ?? 1
 
     graph.addEdgeWithKey(edge.id, edge.source, edge.target, {
-      label: edge.label,
+      label: getEdgeLabel(edge.label),
       weight,
       size: weight * 1.5,
       color: 'rgba(106, 90, 60, 0.78)',
@@ -216,7 +226,7 @@ export function useKnowledgeGraphStoreController() {
       labelRenderedSizeThreshold: 6,
       labelSize: 11,
       labelWeight: '500',
-      renderEdgeLabels: false,
+      renderEdgeLabels: true,
       renderLabels: true,
       stagePadding: 38,
     })

@@ -1,2 +1,5 @@
-export { apiPaths, ChatStreamError, createSessionId, queryGraph, streamChat } from './api'
-export type { ChatStreamOptions } from './api'
+export { apiBaseUrl, apiPaths, getApiUrl, http } from './api'
+export type { RequestOptions } from './api'
+export { ChatStreamError, createSessionId, streamChat } from './dialogue'
+export type { ChatStreamOptions } from './dialogue'
+export { queryGraph } from './graph'

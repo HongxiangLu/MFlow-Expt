@@ -1,6 +1,6 @@
 import { Maximize2 } from 'lucide-react'
 
-import { useKnowledgeGraphStoreController } from '../../store/graph-store.test'
+import { useKnowledgeGraphStoreController } from '../../store/graph-store'
 import styles from './knowledge-graph.module.scss'
 
 export default function KnowledgeGraph() {

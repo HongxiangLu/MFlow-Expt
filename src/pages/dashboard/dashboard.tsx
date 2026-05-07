@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import ReactMarkdown from 'react-markdown'
 import {
   Archive,
   AudioLines,
@@ -15,7 +16,7 @@ import {
 } from 'lucide-react'
 import AppHeader from '../../components/app-header/app-header'
 import KnowledgeGraph from '../../components/knowledge-graph/knowledge-graph'
-import { useDialogueStoreController } from '../../store/dialogue-store.test'
+import { useDialogueStoreController } from '../../store/dialogue-store'
 import mockjpg from '../../../mock/mock.jpg'
 import styles from './dashboarad.module.scss'
 
@@ -167,10 +168,17 @@ export default function MuseumAiPage() {
                       </div>
                     )}
                     <div className={styles.messageBubble}>
-                      <p>
-                        {message.content}
-                        {message.isStreaming && <span className={styles.streamCursor} aria-hidden="true" />}
-                      </p>
+                      {message.role === 'assistant' ? (
+                        <div className={styles.markdownMessage}>
+                          <ReactMarkdown>{message.content}</ReactMarkdown>
+                          {message.isStreaming && <span className={styles.streamCursor} aria-hidden="true" />}
+                        </div>
+                      ) : (
+                        <p>
+                          {message.content}
+                          {message.isStreaming && <span className={styles.streamCursor} aria-hidden="true" />}
+                        </p>
+                      )}
                     </div>
                   </article>
                 ))}

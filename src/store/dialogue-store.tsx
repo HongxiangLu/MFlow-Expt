@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, type FormEvent, type UIEvent, type 
 import { create } from 'zustand'
 
 import { createSessionId, streamChat } from '../services'
-import { requestKnowledgeGraph } from './graph-store.test'
+import { requestKnowledgeGraph } from './graph-store'
 
 export type ChatMessage = {
   id: number
@@ -32,6 +32,8 @@ const initialDialogueState = {
 const autoScrollThreshold = 48
 const resumeAutoScrollThreshold = 4
 const programmaticScrollResetDelay = 120
+const typewriterInterval = 60
+const typewriterCharsPerTick = 1
 
 const fallbackErrorMessage = '抱歉，当前服务暂时不可用，请稍后重试。'
 
@@ -116,6 +118,10 @@ export function useDialogueStoreController() {
   const pendingAutoScrollRef = useRef(false)
   const lastScrollTopRef = useRef(0)
   const programmaticScrollTimerRef = useRef<number | undefined>(undefined)
+  const typewriterQueueRef = useRef<string[]>([])
+  const typewriterTimerRef = useRef<number | undefined>(undefined)
+  const activeAssistantMessageIdRef = useRef<number | undefined>(undefined)
+  const pendingFinishAssistantMessageIdRef = useRef<number | undefined>(undefined)
 
   useEffect(() => {
     return () => {
@@ -124,6 +130,10 @@ export function useDialogueStoreController() {
 
       if (programmaticScrollTimerRef.current !== undefined) {
         window.clearTimeout(programmaticScrollTimerRef.current)
+      }
+
+      if (typewriterTimerRef.current !== undefined) {
+        window.clearTimeout(typewriterTimerRef.current)
       }
 
       resetDialogue()
@@ -233,6 +243,60 @@ export function useDialogueStoreController() {
     }
   }
 
+  const clearTypewriter = () => {
+    if (typewriterTimerRef.current !== undefined) {
+      window.clearTimeout(typewriterTimerRef.current)
+      typewriterTimerRef.current = undefined
+    }
+
+    typewriterQueueRef.current = []
+    activeAssistantMessageIdRef.current = undefined
+    pendingFinishAssistantMessageIdRef.current = undefined
+  }
+
+  const scheduleTypewriter = () => {
+    if (typewriterTimerRef.current !== undefined) {
+      return
+    }
+
+    typewriterTimerRef.current = window.setTimeout(() => {
+      typewriterTimerRef.current = undefined
+
+      const assistantMessageId = activeAssistantMessageIdRef.current
+
+      if (assistantMessageId === undefined) {
+        return
+      }
+
+      const nextChunk = typewriterQueueRef.current.splice(0, typewriterCharsPerTick).join('')
+
+      if (nextChunk) {
+        queueAutoScroll()
+        appendAssistantChunk(assistantMessageId, nextChunk)
+        scheduleTypewriter()
+        return
+      }
+
+      if (pendingFinishAssistantMessageIdRef.current === assistantMessageId) {
+        pendingFinishAssistantMessageIdRef.current = undefined
+        activeAssistantMessageIdRef.current = undefined
+        queueAutoScroll()
+        finishAssistantMessage(assistantMessageId)
+      }
+    }, typewriterInterval)
+  }
+
+  const enqueueTypewriterChunk = (assistantMessageId: number, chunk: string) => {
+    activeAssistantMessageIdRef.current = assistantMessageId
+    typewriterQueueRef.current.push(...Array.from(chunk))
+    scheduleTypewriter()
+  }
+
+  const finishTypewriterWhenDrained = (assistantMessageId: number) => {
+    pendingFinishAssistantMessageIdRef.current = assistantMessageId
+    scheduleTypewriter()
+  }
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
@@ -244,6 +308,7 @@ export function useDialogueStoreController() {
 
     chatAbortControllerRef.current?.abort()
     graphAbortControllerRef.current?.abort()
+    clearTypewriter()
     chatAbortControllerRef.current = new AbortController()
     graphAbortControllerRef.current = new AbortController()
     shouldAutoScrollRef.current = true
@@ -259,6 +324,7 @@ export function useDialogueStoreController() {
 
     nextMessageId.current += 2
     submitMessage(submittedQuery, userMessageId, assistantMessageId)
+    activeAssistantMessageIdRef.current = assistantMessageId
 
     void requestKnowledgeGraph(request, graphAbortControllerRef.current.signal)
 
@@ -267,17 +333,18 @@ export function useDialogueStoreController() {
       onFrame: (frame) => {
         if (frame.chunk) {
           queueAutoScroll()
-          appendAssistantChunk(assistantMessageId, frame.chunk)
+          enqueueTypewriterChunk(assistantMessageId, frame.chunk)
         }
 
         if (frame.finish_reason === 'stop') {
           chatAbortControllerRef.current = undefined
           queueAutoScroll()
-          finishAssistantMessage(assistantMessageId)
+          finishTypewriterWhenDrained(assistantMessageId)
         }
       },
       onError: (errorEvent) => {
         queueAutoScroll()
+        clearTypewriter()
         failAssistantMessage(assistantMessageId, errorEvent.message)
       },
     }).catch((error: unknown) => {
@@ -286,6 +353,7 @@ export function useDialogueStoreController() {
       }
 
       queueAutoScroll()
+      clearTypewriter()
       failAssistantMessage(assistantMessageId, fallbackErrorMessage)
     })
   }
