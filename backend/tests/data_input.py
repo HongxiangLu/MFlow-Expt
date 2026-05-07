@@ -35,7 +35,7 @@ async def main() -> None:
 
     # M-Flow 内部的 Path.cwd() 指向当前工作目录，容易找不到文件
     # 此处使用绝对路径更加保险
-    sample_text = os.path.abspath(os.path.join(os.path.dirname(__file__), 'file.md'))
+    sample_text = os.path.abspath(os.path.join(os.path.dirname(__file__), 'file_1.md'))
     
     # 目标数据集名称，系统会自动为其分配或关联 UUID
     dataset_name = "artifacts_1"

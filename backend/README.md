@@ -128,12 +128,14 @@ M-Flow 支持直接跳过生成步骤获取上下文，其底层提供了以下�
    * **第一步：检索**。调用 `m_flow.search()` 获取单纯的图谱/文本上下文。
    * **第二步：生成**。将获取的上下文直接组装至业务后端的 Prompt 中，交由标准的 LLM 客户端库（如 `AsyncOpenAI`）开启 `stream=True` 进行流式推理，最后经由 SSE 协议推送给前端。
 
-# M-Flow 兼容性：MiniMax 的 System 角色限制
+# M-Flow 的兼容性问题
+
+## MiniMax 的 System 角色限制
 
 在使用 MiniMax 模型接入 M-Flow 进行图谱构建（如调用 `memorize()`）时，可能会遇到如下异常导致流程阻断：
 `litellm.BadRequestError: OpenAIException - invalid params, chat content has invalid message role: system (2013)`
 
-## 报错原因
+### 报错原因
 
 这源于底层的格式严格校验：
 
@@ -141,7 +143,7 @@ M-Flow 支持直接跳过生成步骤获取上下文，其底层提供了以下�
 2. **Litellm 路由**：作为中间件的 `litellm`，即使在 `.env` 中配置了原生的 `LLM_MODEL=minimax/MiniMax-M2.7`，其负责处理的 `MinimaxChatConfig`（继承自 `OpenAIGPTConfig`）也未对 `system` 角色做降级或合并处理。
 3. **MiniMax 严格校验**：MiniMax 平台接口对于传入的 Role 字段有着极其严格的物理校验，直接拒绝并抛弃带有 `system` 标识的任何请求结构体。
 
-## 解决方案
+### 解决方案
 
 修改环境内的 M-Flow 源代码，人为将 `system` 指令前置拼接并降级合并为 `user` 角色。需要修改以下三个底层文件：
 
@@ -181,7 +183,9 @@ def _build_messages(self, user_input: str, system_prompt: str) -> list:
     ]
 ```
 
-# M-Flow 版本标识修正
+> **注意配置细节**：在 `backend/.env` 中**无需**配置 `LLM_ENDPOINT` 以及 `LLM_PROVIDER=custom` 属性，否则会导致 litellm 路由退化为兼容模式，掩盖了原生路由（报 `MinimaxException`）触发的问题。配置前缀 `minimax/` 即足以让它自动定位官方地址（国际版：https://api.minimax.io/v1）。
+
+## M-Flow 版本标识修正
 
 若需要执行 `mflow -ui` 启动内置可视化界面，由于底层包名变更及 GitHub 仓库所有者迁移，需要手动对环境中的 M-Flow 源代码进行以下两处修正：
 
@@ -213,4 +217,35 @@ url = f"https://github.com/m-flow-project/m_flow/archive/refs/tags/v{clean}.zip"
 url = f"https://github.com/FlowElement-ai/m_flow/archive/refs/tags/v{clean}.zip"
 ```
 
-> **注意配置细节**：在 `backend/.env` 中**无需**配置 `LLM_ENDPOINT` 以及 `LLM_PROVIDER=custom` 属性，否则会导致 litellm 路由退化为兼容模式，掩盖了原生路由（报 `MinimaxException`）触发的问题。配置前缀 `minimax/` 即足以让它自动定位官方地址（国际版：https://api.minimax.io/v1）。
+## Windows 环境下的历史日期
+
+在 Windows 环境下入库包含 1970 年以前日期（如古籍年代）的数据时，可能会触发 `OSError: [Errno 22] Invalid argument`。这是因为 Windows 底层 C 库不支持负数时间戳（即 1970 年以前的 Unix 时间戳），导致 Python 的 `datetime.fromtimestamp()` 调用失败。
+
+若遇到此类报错，需要对环境中的两个核心文件进行手动修正：
+
+**1. 修改时间解析器**
+
+*   **文件路径**：`项目环境路径\Lib\site-packages\m_flow\retrieval\time\query_time_parser.py`
+*   **修改点**：定位到约第 992 行，改用 `timedelta` 计算偏移量以兼容负数时间戳。
+
+```python
+# 修改前
+now_dt = datetime.fromtimestamp(now_ms / 1000, tz=timezone.utc)
+
+# 修改后 (兼容 Windows 负数时间戳)
+from datetime import timedelta
+now_dt = datetime(1970, 1, 1, tzinfo=timezone.utc) + timedelta(seconds=now_ms / 1000)
+```
+
+**2. 修改时间提取器（防御性修正）**
+
+*   **文件路径**：`项目环境路径\Lib\site-packages\m_flow\retrieval\time\mentioned_time_extractor.py`
+*   **修改点**：定位到约第 127 行，避免直接调用 `.timestamp()`。
+
+```python
+# 修改前
+ts_ms = int(dt.timestamp() * 1000)
+
+# 修改后 (兼容 Windows 负数时间戳)
+ts_ms = int((dt - datetime(1970, 1, 1, tzinfo=timezone.utc)).total_seconds() * 1000)
+```
