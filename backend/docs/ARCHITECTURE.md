@@ -137,7 +137,115 @@ client = AsyncOpenAI(
 
 ---
 
-## 4. 后续开发路径 (Next Steps)
+## 4. M-Flow 检索降时策略（性能优化专项）
+
+为降低 `/api/chat` 与 `/api/graph/query` 的检索耗时，后端在不破坏接口契约的前提下，优先采用“先减无效计算、再缩搜索空间”的策略。
+
+### 4.1 快速模式切换：`EPISODIC` → `CHUNKS_LEXICAL`（针对 Chat 上下文检索）
+
+**结论**：代码改动量小，主要是 `query_type` 的切换与返回文本抽取逻辑的适配，不涉及路由层与 LLM 调用链重构。
+
+*   **改动面评估（低）**：
+    1. `mflow_client.get_context()` 中，将 `RecallMode.EPISODIC` 切换为 `RecallMode.CHUNKS_LEXICAL`（`m_flow/search/types/RecallMode.py`）。
+    2. 由于 lexical 返回的上下文形态更偏向原始文本块/对象列表，建议在 Facade 层做统一文本抽取，确保传给 LLM 的仍是 `list[str]`。
+    3. `chat_service.py` 无需改协议；其本质只消费 `list[str]` 并拼接为 Prompt。
+
+*   **对“传给大模型的上下文”影响**：
+    *   只要 Facade 继续输出纯文本列表，LLM 下游流程不变。
+    *   变化在于上下文来源从“情境记忆图检索”转为“词法匹配文本块检索”。
+
+*   **检索质量影响**：
+    *   **优点**：关键词命中类问题速度更快、可解释性更直观（匹配到哪些文本块）。
+    *   **代价**：跨句推理、隐式指代、图结构关联能力弱于 EPISODIC/TRIPLET，复杂问题召回质量可能下降。
+    *   **工程建议**：优先用于首轮、短问句、强关键词查询；复杂查询可回退 EPISODIC（分层策略）。
+
+### 4.2 缩小检索范围：可控参数清单（基于 m_flow 源码）
+
+以下参数来自 `m_flow.api.v1.search.search()` 与 `m_flow.search.methods.get_recall_mode_tools()` / 各 retriever 实现，可直接用于降时：
+
+1. **`top_k`**（通用）
+   * 含义：最终返回结果数。
+   * 建议：Chat 场景可从 10 下调到 3~5，显著减少上下文长度与后续 LLM 开销。
+   * **当前现状（已落地）**：后端 `services/mflow_client.py` 已统一设置 `top_k=5`（`get_context` 与 `get_graph` 调用均显式传参）。
+
+2. **`wide_search_top_k`**（EPISODIC/TRIPLET 核心）
+   * 含义：向量召回阶段的候选池大小（粗召回）。
+   * 位置：`search()` → `get_recall_mode_tools()` → `UnifiedTripletSearch` / `EpisodicConfig`。
+   * 建议：从 100 下调到 30~60，通常能明显降低向量检索与图投影耗时。
+   * **当前现状（已落地）**：后端 `services/mflow_client.py` 已统一设置 `wide_search_top_k=30`（`get_context` 与 `get_graph` 均生效）。
+
+3. **`collections`**（EPISODIC/TRIPLET）
+   * 含义：限定要检索的向量集合字段。
+   * 位置：`UnifiedTripletSearch.get_triplets()`、`fine_grained_triplet_search()`。
+   * 建议：按业务收敛集合（例如仅保留 `Episode_summary`、`Entity_name` 等高价值字段），减少并行集合搜索数量。
+
+4. **`only_context`**（通用，强建议开启）
+   * 含义：只返回检索上下文，不做 completion 生成。
+   * 作用：避免检索阶段触发不必要的生成链路，缩短端到端延迟。
+   * **当前现状（已落地）**：后端 `services/mflow_client.py` 已在 `get_context` 与 `get_graph` 调用中开启 `only_context=True`。
+
+5. **`display_mode` / `max_facets_per_episode` / `max_points_per_facet`**（EPISODIC）
+   * 含义：控制 episodic 输出粒度与上下文体积。
+   * 建议：优先 `display_mode="summary"`，并降低 facet/point 上限，减少序列化与 Prompt 膨胀。
+   * **当前现状（已落地）**：后端 `services/mflow_client.py` 已统一设置 `display_mode="summary"`（EPISODIC 上下文检索生效，图谱链路保持兼容传参）。
+
+6. **`enable_hybrid_search` / `enable_time_bonus` / `enable_adaptive_weights`**（EPISODIC）
+   * 含义：启用额外检索与重排增强能力（质量优先，但计算更重）。
+   * 建议：延迟敏感场景可按需关闭部分增强项。
+
+7. **`triplet_distance_penalty`、`hop_cost`、`edge_miss_cost`**（图路径/重排相关）
+   * 含义：控制图距离与路径代价。
+   * 说明：主要影响排序与扩散行为；虽非直接“限流参数”，但会影响有效候选规模与重排计算量。
+
+### 4.3 加结果缓存（后端）
+
+**策略**：为 `mflow_client.get_context()` 与 `mflow_client.get_graph()` 增加短 TTL 缓存（内存缓存优先，后续可替换 Redis），缓存键建议至少包含 `query_text + recall_mode + top_k + collections` 等检索关键参数。
+
+*   **可行性评估（高）**：
+    1. 代码侵入低，主要集中在 Facade 层（`services/mflow_client.py`），不影响 API 协议。
+    2. 可先采用进程内缓存（如 `cachetools.TTLCache`）快速落地，再按部署规模演进到集中缓存。
+    3. 需定义失效策略：知识库更新（memorize/add）后主动失效，避免旧数据命中。
+
+*   **降时效果评估**：
+    *   **命中场景**（重复问句、会话内追问、并发相同查询）通常收益显著，检索耗时可降至毫秒级缓存读取。
+    *   **未命中场景**无收益，但不会引入额外远程开销（本地缓存判定开销很低）。
+    *   对长尾随机查询收益有限，主要改善热点与抖动。
+
+### 4.4 减少日志体积（后端）
+
+**策略**：对检索与流式链路日志做分级与采样，避免在 INFO 级别打印大对象全文（如完整 M-Flow 原始结果、完整 SSE 单字帧）。
+
+*   **可行性评估（高）**：
+    1. 仅涉及日志语句调整，不改变业务逻辑。
+    2. 可采用“摘要日志”模式：记录 `count/latency/preview/hash`，将完整正文下沉到 DEBUG。
+    3. 与现有标准 `logging` 完全兼容，无需新增依赖。
+
+*   **降时效果评估**：
+    *   当日志量大（尤其逐字 SSE + 大结果对象）时，I/O 与字符串序列化成本会显著拖慢请求；收敛日志可带来稳定降时。
+    *   在低日志量场景收益中等，但可明显降低控制台噪声与磁盘写放大。
+
+### 4.5 前端并发策略优化（调用编排）
+
+**策略**：降低前端对 `/api/chat` 与 `/api/graph/query` 的“无条件并发”强度，采用分阶段触发：
+1. 先发 `/api/chat`，待首批 token 到达后再触发图谱请求；
+2. 对短输入/低置信度输入可延迟或跳过图谱请求；
+3. 对相同 query 的并发请求做前端去重（in-flight dedup）。
+
+*   **可行性评估（中高）**：
+    1. 主要改前端调度逻辑，后端 API 无需改协议。
+    2. 可逐步灰度：先加去重与延迟触发，再评估是否引入更复杂策略（如 query 分类）。
+    3. 需要前端状态管理配合（请求生命周期、取消策略、重试策略）。
+
+*   **降时效果评估**：
+    *   单用户体感：可减少首屏卡顿与资源争抢，提升首 token 到达速度稳定性。
+    *   系统层面：可降低 M-Flow 突发并发压力，减少高峰时长尾延迟。
+    *   代价：图谱展示可能略晚于文本回答，需要产品侧确认体验优先级。
+
+> 备注：源码显示 `fine_grained_triplet_search()` 中 `wide_search_top_k` 会直接影响各 collection 的向量检索 `limit`，是最直接的耗时杠杆之一。
+
+---
+
+## 5. 后续开发路径 (Next Steps)
 
 按照 MVP 原则，接下来的开发分为以下步骤执行：
 

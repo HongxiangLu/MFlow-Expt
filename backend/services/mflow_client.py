@@ -23,6 +23,11 @@ from m_flow import RecallMode
 
 logger = logging.getLogger(__name__)
 
+# 检索性能参数（已按当前优化目标收敛）
+TOP_K = 5
+WIDE_SEARCH_TOP_K = 30
+DISPLAY_MODE = "summary"
+
 # 预定义的 12 种标准业务类型
 # 依据 API.md 的规范，前端对这 12 种类型的节点会进行特定样式的渲染。
 # 任何不属于这些标准类型的节点都会被强制降级为 "other"。
@@ -59,7 +64,11 @@ async def get_context(query: str) -> list[str]:
     search_results = await m_flow_search(
         query_text=query,
         query_type=RecallMode.EPISODIC,
-        use_combined_context=False
+        top_k=TOP_K,
+        use_combined_context=False,
+        only_context=True,
+        wide_search_top_k=WIDE_SEARCH_TOP_K,
+        display_mode=DISPLAY_MODE,
     )
     logger.info("M-Flow context 原始返回: type=%s, value=%s", type(search_results), search_results)
     
@@ -128,8 +137,12 @@ async def get_graph(query: str) -> dict:
     search_result = await m_flow_search(
         query_text=query,
         query_type=RecallMode.TRIPLET_COMPLETION,
+        top_k=TOP_K,
         verbose=True,  # 必须开启 verbose 才能带回 graphs 对象
-        use_combined_context=True  # 必须开启组合上下文才能返回带有 graphs 的 CombinedSearchResult
+        use_combined_context=True,  # 必须开启组合上下文才能返回带有 graphs 的 CombinedSearchResult
+        only_context=True,
+        wide_search_top_k=WIDE_SEARCH_TOP_K,
+        display_mode=DISPLAY_MODE,
     )
     logger.info("M-Flow graph 原始返回: type=%s, value=%s", type(search_result), search_result)
 
