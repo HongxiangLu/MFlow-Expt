@@ -65,22 +65,43 @@ backend/
 这是系统的核心，所有 RAG 链路的编排逻辑集中于此。
 *   **`chat_service.py`**: 负责处理流式对话接口。**不执行 Query Rewrite**，因为完整的对话历史会随 Prompt 一起发送给 LLM。它依次执行：
     1. 通过 SQLAlchemy 查询对应 `session_id` 的全部历史消息（不设轮数与 Token 上限）。
-    2. 将用户原始 Query 传给 `mflow_client` 获取文档上下文 (Context)。基于源码调研，此处使用 `m_flow.query(query, mode="episodic")` 接口。
-    3. 组装 Prompt（Context + History + Query + System Prompt），调用 LLM 获取 SSE 流式响应。System Prompt 中需限定模型的回答风格，具体模板在代码实现阶段给出，总体原则是让大模型尽可能命中缓存。
-    4. 异步将用户问题和完整回答持久化到数据库（通过 `AsyncSession`）。
+    2. 将用户原始 Query 传给 `mflow_client` 获取文档上下文 (Context)。
+    3. 组装 Prompt（System Prompt + History + Query），调用 LLM 获取 SSE 流式响应。
+    4. 过滤 MiniMax 模型输出的 `<think>...</think>` 思维链标签（详见下方说明）。
+    5. 异步将用户问题和完整回答（已清理思维链）持久化到数据库（通过 `AsyncSession`）。
+    *   **System Prompt 模板**（固定角色前缀 + 动态上下文注入，最大化 KV Cache 命中率）：
+        ```
+        你是一位博物馆文物专家，擅长解答关于历史文物、古代工艺、文化遗产等领域的问题。
+        请基于以下检索到的知识内容回答用户的问题。回答时应准确、专业，并以通俗易懂的方式表达。
+        如果检索内容中没有直接相关的信息，请基于已有内容进行合理推断，但需注明推断部分。
+
+        【检索到的知识内容】
+        {context}
+        ```
+    *   **SSE yield 格式**：`stream_chat()` 是一个异步生成器，yield `{"event": "message"|"error", "data": "<JSON>"}` 格式的 dict，供路由层的 `EventSourceResponse` 直接消费。
 *   **`graph_service.py`**: 负责处理知识图谱渲染接口。**独立执行 Query Rewrite**，与 Chat 接口彻底解耦。
     1. 查询全部历史（用于重写）。
     2. **跳过策略**：首先由后端代码判定 session 内是否有历史消息——若无历史（首轮对话）则跳过重写，直接使用原始 query；若有历史，则调用 LLM 进行 Query Rewrite（Prompt 中指示"如果当前提问语义已充分独立，则原样返回"），输出为**纯文本**。
-    3. 将独立 Query 传给 `mflow_client`，专门请求图谱节点与边。
-    4. 返回包含 `graphId`、`centerNodeId`、`nodes`、`edges` 的完整 Graph JSON。
+    3. 清理 LLM 返回结果中的 `<think>...</think>` 思维链标签。
+    4. 将独立 Query 传给 `mflow_client`，专门请求图谱节点与边。
+    5. 返回包含 `graphId`、`centerNodeId`、`nodes`、`edges` 的完整 Graph JSON。
+    *   **Query Rewrite System Prompt**：
+        ```
+        你是一个查询重写助手。你的任务是将用户的提问重写为一个语义完备的独立句子，
+        消除其中的代词和模糊指代。
+        如果当前提问的语义已经充分独立，不存在需要消解的指代，则原样返回用户的提问。
+        只输出重写后的句子，不要添加任何解释或格式。
+        ```
 *   **`mflow_client.py`**: 适配器 / 门面（Facade）。将 M-Flow 本地库的具体 API 调用封装为语义清晰的函数。引入 Facade 层的原因是：隔离底层 SDK 的实现细节与版本变更风险，使上层 Service 代码不直接耦合于 M-Flow 的内部 API 签名。
-    *   **上下文检索**: 使用 `m_flow.query(query, mode="episodic")` 获取相关的片段内容。
+    *   **上下文检索**: 使用 `m_flow.search(query, query_type=RecallMode.EPISODIC)` 获取相关的片段内容。
     *   **图谱检索**: 使用 `m_flow.search(query, query_type=RecallMode.TRIPLET_COMPLETION, verbose=True)` 获取包含节点与边的 `CombinedSearchResult` 对象。
     *   **数据映射逻辑**:
         *   **`graphId`**: 由后端基于查询字符串的 Hash (如 SHA-256) 生成，确保同一查询在前端具有稳定的图谱标识。
         *   **`nodeType` 过滤与映射**: M-Flow 返回的 `type` 字段可能包含内置类型或原始数据类型。后端需执行：(1) 过滤掉 M-Flow 的内置系统节点类型；(2) 将剩余类型映射至 `API.md` 定义的 12 种标准业务类型（如 `artifact`, `dynasty`）；(3) 对于无法匹配的类型，统一降级为 `other` 标识。
         *   **`centerNodeId`**: 由后端选取检索结果中权重最高或首个 `artifact` 类型节点的 ID 作为中心。
         *   **`edges`**: 将 M-Flow 的关系转换为带唯一 ID（如 `f"{source}_{label}_{target}"`）的标准 `GraphEdge`。
+
+> **MiniMax 思维链标签处理**: MiniMax-M2.7 在推理时会输出 `<think>...</think>` 包裹的思维链内容。流式场景下思维链可能跨越多个 chunk，`chat_service.py` 使用布尔状态标记 `_in_think` 逐 chunk 追踪过滤；非流式场景（Query Rewrite）使用正则 `re.sub` 清理。消息落盘前也会做防御性正则清理。详见 `README.md` 中的兼容性问题说明。
 
 ### 3.3 数据模型设计 (`db/models.py`)
 采用 SQLAlchemy 声明式映射（Declarative Mapping），其优势在于将数据表结构与 Python 类一一对应，代码即文档，同时获得 IDE 的类型提示与自动补全支持：
