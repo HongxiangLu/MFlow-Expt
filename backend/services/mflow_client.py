@@ -202,19 +202,17 @@ async def get_context(query: str) -> list[str]:
         logger.info("M-Flow context 检索跳过：收到空查询。")
         return []
 
-    logger.info("M-Flow context 检索开始 (CHUNKS_LEXICAL): query=%s", query)
+    logger.info("M-Flow context 检索开始: query=%s", query)
 
-    # 使用 CHUNKS_LEXICAL 词法匹配模式替代 EPISODIC 情境记忆模式
-    # 优势：不触发向量召回与图投影，延迟显著低于 EPISODIC
-    # 代价：跨句推理与隐式指代能力弱于 EPISODIC，但 Chat 场景有完整历史补偿
-    # 注意：display_mode / wide_search_top_k 为 EPISODIC 专属参数，词法检索无需传递
     t0 = time.perf_counter()
     search_results = await m_flow_search(
         query_text=query,
-        query_type=RecallMode.CHUNKS_LEXICAL,
+        query_type=RecallMode.EPISODIC,
         top_k=TOP_K,
         use_combined_context=False,
         only_context=True,
+        wide_search_top_k=WIDE_SEARCH_TOP_K,
+        display_mode=DISPLAY_MODE,
     )
     elapsed = time.perf_counter() - t0
     raw_count = len(search_results) if isinstance(search_results, list) else 1
@@ -227,7 +225,7 @@ async def get_context(query: str) -> list[str]:
             if hasattr(r, "search_result"):
                 context_list.append(str(r.search_result))
             elif isinstance(r, dict):
-                content = r.get("search_result") or r.get("context") or r.get("text") or str(r)
+                content = r.get("search_result") or r.get("context") or str(r)
                 context_list.append(str(content))
             else:
                 context_list.append(str(r))
