@@ -1,7 +1,7 @@
-import MuseumAiPage from './pages/dashboard/dashboard'
+import RouterView from './router'
 
 function App() {
-  return <MuseumAiPage />
+  return <RouterView />
 }
 
 export default App

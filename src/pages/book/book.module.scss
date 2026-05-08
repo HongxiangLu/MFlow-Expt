@@ -1,0 +1,56 @@
+$left-right-bg: #f2f3f5;
+$center-bg: #f6f6f6;
+$border: #e1e3e6;
+
+.page {
+  height: 100svh;
+  min-width: 1024px;
+  overflow: hidden;
+  background: $center-bg;
+  color: #18181b;
+  font-family:
+    Inter,
+    "Noto Sans SC",
+    "Microsoft YaHei",
+    system-ui,
+    sans-serif;
+}
+
+.workspace {
+  height: calc(100svh - 56px);
+  display: grid;
+  grid-template-columns: 380px minmax(440px, 1fr) 440px;
+}
+
+.leftColumn,
+.centerColumn,
+.rightColumn {
+  min-height: 0;
+}
+
+.leftColumn,
+.rightColumn {
+  background: $left-right-bg;
+}
+
+.leftColumn {
+  border-right: 1px solid $border;
+}
+
+.centerColumn {
+  background: $center-bg;
+}
+
+.rightColumn {
+  border-left: 1px solid $border;
+}
+
+@media (max-width: 1199px) {
+  .page {
+    min-width: 0;
+  }
+
+  .workspace {
+    grid-template-columns: 225px minmax(430px, 1fr) 225px;
+  }
+}
