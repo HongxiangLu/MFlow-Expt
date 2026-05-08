@@ -122,7 +122,7 @@ function buildGraph(graphResponse: GraphResponse | null) {
     graph.addEdgeWithKey(edge.id, edge.source, edge.target, {
       label: getEdgeLabel(edge.label),
       weight,
-      size: weight * 1.5,
+      size: weight * 2,
       color: 'rgba(106, 90, 60, 0.78)',
     })
   })
@@ -218,14 +218,14 @@ export function useKnowledgeGraphStoreController() {
       defaultEdgeColor: 'rgba(106, 90, 60, 0.76)',
       defaultEdgeType: 'line',
       edgeLabelColor: { color: '#8d7a55' },
-      edgeLabelSize: 8,
+      edgeLabelSize: 11,
       edgeLabelWeight: '500',
       labelColor: { color: '#d4d4d8' },
       labelDensity: 0.25,
       labelFont: 'Inter, "Noto Sans SC", "Microsoft YaHei", sans-serif',
       labelRenderedSizeThreshold: 6,
-      labelSize: 11,
-      labelWeight: '500',
+      labelSize: 13,
+      labelWeight: '600',
       renderEdgeLabels: true,
       renderLabels: true,
       stagePadding: 38,
@@ -247,7 +247,7 @@ export function useKnowledgeGraphStoreController() {
       labelDensity: 0,
       renderEdgeLabels: false,
       renderLabels: false,
-      stagePadding: 16,
+      stagePadding: 20,
     })
     const minimapContainer = minimapContainerRef.current
     let isDraggingMinimap = false
