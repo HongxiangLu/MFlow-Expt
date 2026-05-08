@@ -20,7 +20,7 @@
 *   **Query Rewrite 策略**: Query Rewrite **仅用于图谱查询接口** (`/api/graph/query`)。对话接口 (`/api/chat`) 不执行 Query Rewrite，因为对话接口会将完整的多轮历史连同当前提问一起发送给 LLM，模型本身具备从上下文中理解指代关系的能力。两个接口彻底解耦，互不干涉。
 *   **CORS 策略（MVP）**: 当前阶段统一采用 `allow_origins=["*"]` 放开跨域，优先保证前后端联调效率；同时设置 `allow_credentials=False`，降低开放跨域下的凭据风险。生产阶段再收敛为白名单域名。
 *   **Uvicorn 启动约定（开发环境）**: 固定使用 `uvicorn main:app --reload --host 0.0.0.0 --port 8000`，确保本机与局域网调试入口一致，并保留热重载能力。
-*   **日志策略（MVP）**: 统一采用 Python 标准库 `logging`，当前不引入 `loguru` 等第三方日志框架，避免在验证期增加额外依赖与迁移成本。
+*   **日志策略（MVP）**: 统一采用 Python 标准库 `logging`，当前不引入 `loguru` 等第三方日志框架，避免在验证期增加额外依赖与迁移成本。日志基础设施集中在 `core/logging.py` 模块中，提供：(1) 基于 ANSI 转义序列的彩色终端输出（时间戳灰色、INFO/模块名蓝色、WARNING 黄色、ERROR 红色）；(2) `preview_text()` 工具函数，用于在日志中安全输出长文本的截断预览（超出部分追加 `......` 省略标识）；(3) `setup_logging()` 一次性初始化函数，由 `main.py` 在模块顶层调用。
 
 ---
 
@@ -39,7 +39,7 @@ backend/
 │   ├── __init__.py
 │   ├── config.py            # pydantic-settings BaseSettings 配置类（读取 .env 中的后端配置）
 │   ├── llm.py               # 实例化基于 openai 包的 MiniMax 客户端单例
-│   └── utils.py             # 通用工具函数（如日志预览文本裁剪）
+│   └── logging.py           # 日志基础设施（彩色 Formatter、preview_text、setup_logging）
 ├── db/                      # 数据库与持久化层
 │   ├── __init__.py
 │   ├── database.py          # SQLAlchemy 异步引擎 (AsyncEngine)、异步会话工厂 (async_session)、WAL 模式初始化
@@ -227,7 +227,9 @@ client = AsyncOpenAI(
     *   当日志量大（尤其逐字 SSE + 大结果对象）时，I/O 与字符串序列化成本会显著拖慢请求；收敛日志可带来稳定降时。
     *   在低日志量场景收益中等，但可明显降低控制台噪声与磁盘写放大。
 *   **当前现状（已落地）**：
-    *   `chat_service.py`、`graph_service.py`、`mflow_client.py` 已采用摘要日志策略（长度/数量/预览），不再在 INFO 级别输出大对象全文。
+    *   日志基础设施已从 `main.py` 抽离至独立模块 `core/logging.py`，包含彩色终端格式化器 (`_ColoredFormatter`)、截断预览工具 (`preview_text`) 及一次性初始化函数 (`setup_logging`)。
+    *   `chat_service.py`、`graph_service.py`、`mflow_client.py` 已全面采用 `preview_text()` 对 query、LLM 输出、图谱节点/边映射等潜在长文本进行截断预览，超出部分追加 `......` 省略标识。
+    *   终端输出按等级着色（INFO 蓝色、WARNING 黄色、ERROR 红色），时间戳精确到秒（灰色），每条日志末尾追加空行以提升可读性。
 
 ### 4.5 前端并发策略优化（调用编排）
 

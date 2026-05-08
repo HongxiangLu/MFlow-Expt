@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 from core.llm import llm_client
-from core.utils import preview_text
+from core.logging import preview_text
 from db.models import Message
 from schemas.payloads import GraphResponse, GraphNode, GraphEdge
 from services import mflow_client
@@ -89,7 +89,7 @@ async def query_graph(query: str, session_id: str, db: AsyncSession) -> GraphRes
     else:
         # 多轮对话：执行 Query Rewrite
         rewritten_query = await _rewrite_query(query, history_messages)
-        logger.info("图谱查询 - Query Rewrite: '%s' → '%s'", query, rewritten_query)
+        logger.info("图谱查询 - Query Rewrite: '%s' → '%s'", preview_text(query), preview_text(rewritten_query))
 
     # =================================================================
     # Step 3: 图谱检索

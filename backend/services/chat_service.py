@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 from core.llm import llm_client
-from core.utils import preview_text
+from core.logging import preview_text
 from db.models import ChatSession, Message
 from schemas.payloads import ChatChunk, SSEError
 from services import mflow_client
@@ -179,7 +179,7 @@ async def stream_chat(query: str, session_id: str, db: AsyncSession):
             delta = chunk.choices[0].delta if chunk.choices else None
             if delta and delta.content:
                 text = delta.content
-                logger.info("收到 MiniMax 原始增量: char_count=%d, preview=%s", len(text), text[:80])
+                logger.info("收到 MiniMax 原始增量: char_count=%d, preview=%s", len(text), preview_text(text, 80))
 
                 # 过滤 MiniMax 模型的 <think>...</think> 思维链输出
                 # 思维链可能跨多个 chunk，需要用状态标记追踪

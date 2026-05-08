@@ -14,7 +14,7 @@ import logging
 import os
 
 from dotenv import load_dotenv
-from core.utils import preview_text
+from core.logging import preview_text
 
 # 在导入 M-Flow SDK 之前加载 .env 环境变量
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
@@ -138,7 +138,7 @@ async def get_graph(query: str) -> dict:
             "edges": []
         }
 
-    logger.info("M-Flow graph 检索开始: query=%s", query)
+    logger.info("M-Flow graph 检索开始: query=%s", preview_text(query))
 
     # 1. 调用 m_flow.search 获取带图形结构的聚合结果
     search_result = await m_flow_search(
@@ -188,8 +188,7 @@ async def get_graph(query: str) -> dict:
                     "label": node.get("label") or node.get("id"),
                     "nodeType": node_type
                 })
-                # 节点逐条映射日志容易刷屏，保留在 DEBUG 级别。
-                logger.debug("图谱节点映射: mapped=%s", nodes[-1])
+                logger.info("图谱节点映射: mapped=%s", preview_text(str(nodes[-1])))
             
             # 处理并转化边 (Edges)
             for edge in graph_data.get("edges", []):
@@ -208,8 +207,7 @@ async def get_graph(query: str) -> dict:
                     "label": label,
                     "weight": 1.0  # 默认权重
                 })
-                # 边逐条映射日志容易刷屏，保留在 DEBUG 级别。
-                logger.debug("图谱边映射: mapped=%s", edges[-1])
+                logger.info("图谱边映射: mapped=%s", preview_text(str(edges[-1])))
 
     # 生成当前知识检索网络视图的全局唯一 ID
     # 相同 Query 将产生稳定的 graphId，有利于前端缓存或状态保持
@@ -234,7 +232,7 @@ async def get_graph(query: str) -> dict:
     }
     logger.info(
         "M-Flow graph 解析完成: query=%s, graphId=%s, centerNodeId=%s, node_count=%d, edge_count=%d",
-        query,
+        preview_text(query),
         graph_id,
         center_node_id,
         len(nodes),
