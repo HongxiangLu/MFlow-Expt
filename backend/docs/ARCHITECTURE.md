@@ -250,15 +250,40 @@ client = AsyncOpenAI(
 
 > 备注：源码显示 `fine_grained_triplet_search()` 中 `wide_search_top_k` 会直接影响各 collection 的向量检索 `limit`，是最直接的耗时杠杆之一。
 
+### 4.6 统一耗时埋点（可观测性增强）
+
+**策略**：在检索、重写、LLM 生成等关键链路节点通过 `time.perf_counter()` 打上精确计时，输出结构化的性能日志，为后续优化提供数据支撑。
+
+*   **可行性评估（高）**：
+    1. 仅新增计时逻辑，不改变业务流程与接口契约。
+    2. `time.perf_counter()` 为 Python 标准库函数，无额外依赖。
+    3. 日志格式统一为 `操作描述: {elapsed:.2f}s`，便于后续正则提取与聚合分析。
+
+*   **覆盖范围**：
+    *   `services/mflow_client.py`：`get_context()` 检索耗时、`get_graph()` 检索耗时。
+    *   `services/graph_service.py`：Query Rewrite LLM 调用耗时、图谱查询全链路端到端耗时。
+    *   `services/chat_service.py`：M-Flow 检索阶段耗时、LLM 首 token 到达耗时、LLM 全流程耗时。
+
+*   **当前现状（已落地）**：上述所有埋点已在对应模块中实现，日志示例：
+    ```
+    M-Flow context 检索耗时: 0.35s | type=<class 'list'>, raw_count=5
+    M-Flow graph 检索耗时: 2.18s | type=<class 'CombinedSearchResult'>
+    Query Rewrite LLM 调用耗时: 1.05s
+    LLM 首 token 耗时: 0.82s | session_id=sess-xxx
+    MiniMax 流式输出结束: session_id=sess-xxx, answer_length=256, LLM总耗时=3.41s
+    图谱查询全链路耗时: 3.58s | session_id=sess-xxx
+    ```
+
 ---
 
 ## 5. 当前实施现状与后续建议 (Current State & Next Steps)
 
-当前代码已完成 MVP 主链路落地（真实 M-Flow 接入、SSE 单字符流、图谱查询与 Query Rewrite 解耦、日志摘要化与检索参数收敛）。
+当前代码已完成 MVP 主链路落地（真实 M-Flow 接入、SSE 单字符流、图谱查询与 Query Rewrite 解耦、日志摘要化与检索参数收敛），并已完成统一耗时埋点。
 
 后续建议聚焦于性能与工程化增强：
 
-1.  **缓存落地**：在 `services/mflow_client.py` 增加短 TTL 缓存，优先覆盖热点重复查询。
-2.  **检索策略分层**：按查询复杂度在 `EPISODIC` 与 `CHUNKS_LEXICAL` 间动态切换，平衡速度与质量。
-3.  **前端并发治理**：优化 `/api/chat` 与 `/api/graph/query` 的触发时机，减少资源争抢。
-4.  **可观测性增强**：在保持摘要日志的前提下补充统一耗时埋点（检索/重写/LLM 首包与总耗时）。
+1.  **缓存落地**：在 `services/mflow_client.py` 增加短 TTL 缓存（如 `cachetools.TTLCache`），优先覆盖热点重复查询。
+2.  **检索模式切换**：将 Chat 上下文检索从 `EPISODIC` 全量切换至 `CHUNKS_LEXICAL`，释放并发资源。
+3.  **检索策略分层**：基于耗时埋点数据，评估是否需要按查询复杂度在 `CHUNKS_LEXICAL` 与 `EPISODIC` 间动态切换，平衡速度与质量。
+4.  **前端并发治理**：优化 `/api/chat` 与 `/api/graph/query` 的触发时机，减少资源争抢。
+

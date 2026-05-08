@@ -12,6 +12,7 @@ M-Flow RAG 引擎客户端适配器 (M-Flow Client Facade)
 import hashlib
 import logging
 import os
+import time
 
 from dotenv import load_dotenv
 from core.logging import preview_text
@@ -61,7 +62,7 @@ async def get_context(query: str) -> list[str]:
 
     logger.info("M-Flow context 检索开始: query=%s", query)
 
-    # 不再使用有 Bug 的 m_flow_query，改用底层 m_flow_search 直接获取
+    t0 = time.perf_counter()
     search_results = await m_flow_search(
         query_text=query,
         query_type=RecallMode.EPISODIC,
@@ -71,8 +72,9 @@ async def get_context(query: str) -> list[str]:
         wide_search_top_k=WIDE_SEARCH_TOP_K,
         display_mode=DISPLAY_MODE,
     )
+    elapsed = time.perf_counter() - t0
     raw_count = len(search_results) if isinstance(search_results, list) else 1
-    logger.info("M-Flow context 原始返回: type=%s, raw_count=%d", type(search_results), raw_count)
+    logger.info("M-Flow context 检索耗时: %.2fs | type=%s, raw_count=%d", elapsed, type(search_results), raw_count)
     
     context_list = []
     if isinstance(search_results, list):
@@ -141,6 +143,7 @@ async def get_graph(query: str) -> dict:
     logger.info("M-Flow graph 检索开始: query=%s", preview_text(query))
 
     # 1. 调用 m_flow.search 获取带图形结构的聚合结果
+    t0 = time.perf_counter()
     search_result = await m_flow_search(
         query_text=query,
         query_type=RecallMode.TRIPLET_COMPLETION,
@@ -151,7 +154,8 @@ async def get_graph(query: str) -> dict:
         wide_search_top_k=WIDE_SEARCH_TOP_K,
         display_mode=DISPLAY_MODE,
     )
-    logger.info("M-Flow graph 原始返回: type=%s", type(search_result))
+    elapsed = time.perf_counter() - t0
+    logger.info("M-Flow graph 检索耗时: %.2fs | type=%s", elapsed, type(search_result))
 
     nodes = []
     edges = []

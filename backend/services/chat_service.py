@@ -10,6 +10,7 @@
 
 import logging
 import re
+import time
 
 import openai
 from sqlalchemy import select
@@ -96,8 +97,10 @@ async def stream_chat(query: str, session_id: str, db: AsyncSession):
     # Step 2: RAG 知识检索
     # =================================================================
     try:
+        t_retrieval = time.perf_counter()
         context_list = await mflow_client.get_context(query)
-        logger.info("M-Flow context 获取成功: session_id=%s, context_count=%d", session_id, len(context_list))
+        elapsed_retrieval = time.perf_counter() - t_retrieval
+        logger.info("M-Flow context 获取成功: session_id=%s, context_count=%d, 检索耗时=%.2fs", session_id, len(context_list), elapsed_retrieval)
         if context_list:
             logger.info(
                 "M-Flow context 预览: first_len=%d, first_preview=%s",
@@ -165,8 +168,10 @@ async def stream_chat(query: str, session_id: str, db: AsyncSession):
     # =================================================================
     full_answer = ""  # 在内存中拼接完整回答，用于后续持久化
     _in_think = False  # 状态标记：是否正处于 <think> 标签内部
+    _first_token_yielded = False  # 耗时埋点：是否已产出首个有效 token
 
     try:
+        t_llm_start = time.perf_counter()
         stream = await llm_client.chat.completions.create(
             model=settings.MINIMAX_MODEL,
             messages=messages,
@@ -201,6 +206,11 @@ async def stream_chat(query: str, session_id: str, db: AsyncSession):
                         continue  # 仍在 think 标签内，跳过此 chunk
 
                 if text:  # 过滤后仍有有效内容
+                    # 耗时埋点：记录 LLM 首个有效 token 到达时间
+                    if not _first_token_yielded:
+                        elapsed_first_token = time.perf_counter() - t_llm_start
+                        logger.info("LLM 首 token 耗时: %.2fs | session_id=%s", elapsed_first_token, session_id)
+                        _first_token_yielded = True
                     # 为实现“打字机”效果，将有效增量按单字符拆分后逐帧推送。
                     # 日志在增量级别记录一次，避免逐字日志导致噪声过大。
                     logger.info("发送 SSE 单字流帧: frame_count=%d", len(text))
@@ -225,7 +235,11 @@ async def stream_chat(query: str, session_id: str, db: AsyncSession):
             "event": "message",
             "data": stop_payload,
         }
-        logger.info("MiniMax 流式输出结束: session_id=%s, answer_length=%d", session_id, len(full_answer))
+        elapsed_llm_total = time.perf_counter() - t_llm_start
+        logger.info(
+            "MiniMax 流式输出结束: session_id=%s, answer_length=%d, LLM总耗时=%.2fs",
+            session_id, len(full_answer), elapsed_llm_total,
+        )
 
     except openai.APITimeoutError:
         logger.error("LLM 调用超时")

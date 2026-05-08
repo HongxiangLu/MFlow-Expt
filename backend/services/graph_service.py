@@ -10,6 +10,7 @@
 
 import logging
 import re
+import time
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -56,6 +57,7 @@ async def query_graph(query: str, session_id: str, db: AsyncSession) -> GraphRes
         HTTPException(404): 当 M-Flow 图谱检索返回空结果时抛出。
     """
     logger.info("图谱查询开始: session_id=%s, query=%s", session_id, query)
+    t_pipeline = time.perf_counter()
 
     # =================================================================
     # Step 1: 查询历史消息
@@ -131,6 +133,8 @@ async def query_graph(query: str, session_id: str, db: AsyncSession) -> GraphRes
         len(response.nodes),
         len(response.edges),
     )
+    elapsed_pipeline = time.perf_counter() - t_pipeline
+    logger.info("图谱查询全链路耗时: %.2fs | session_id=%s", elapsed_pipeline, session_id)
     return response
 
 
@@ -165,12 +169,14 @@ async def _rewrite_query(query: str, history_messages: list[Message]) -> str:
     )
 
     try:
+        t0 = time.perf_counter()
         response = await llm_client.chat.completions.create(
             model=settings.MINIMAX_MODEL,
             messages=messages,
             stream=False,
         )
-        logger.info("Query Rewrite 原始响应已收到")
+        elapsed = time.perf_counter() - t0
+        logger.info("Query Rewrite LLM 调用耗时: %.2fs", elapsed)
 
         rewritten = response.choices[0].message.content.strip()
         logger.info("Query Rewrite 原始文本: len=%d, preview=%s", len(rewritten), preview_text(rewritten))
