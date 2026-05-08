@@ -276,11 +276,20 @@ async def query_graph(query: str, session_id: str, db: AsyncSession) -> GraphRes
     # 1. 查询 session 历史消息
     # 2. Query Rewrite 跳过策略：
     #    - 无历史 → 直接用原始 query
-    #    - 有历史 → 调用 LLM 重写（Prompt 含"若语义独立则原样返回"）
-    # 3. 调用 mflow_client.get_graph(rewritten_query)
-    # 4. 若结果为空 → raise HTTPException(404)（API.md §1.5.3）
-    # 5. 返回 GraphResponse
+    #    - 有历史 → 调用 LLM 重写（system + 单条 user任务指令，含结构化历史与当前提问）
+    # 3. Rewrite 输出治理：
+    #    - 清理 <think> 标签并规整为单行纯文本
+    #    - 若命中回答腔/异常长度，回退原始 query
+    # 4. 调用 mflow_client.get_graph(rewritten_query)
+    # 5. 若结果为空 → raise HTTPException(404)（API.md §1.5.3）
+    # 6. 返回 GraphResponse
 ```
+
+**优化备注（Query Rewrite 稳定性）**：
+- 问题根因：将历史逐条作为 chat 多轮输入时，模型易进入“继续对话”模式并直接回答。
+- 方案：改为任务式输入编排（system + 单条 user 指令）并增加负向约束（禁止回答/解释）。
+- 参数：重写调用固定 `temperature=0.0`，并限制历史窗口（当前实现：最近 12 条）。
+- 结果：重写输出更稳定地保持“查询句”形态，降低回答文本污染图谱检索的概率。
 
 ### 验证方式
 

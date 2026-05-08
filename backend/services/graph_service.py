@@ -38,8 +38,24 @@ REWRITE_SYSTEM_PROMPT = (
     "你是一个查询重写助手。你的任务是将用户的提问重写为一个语义完备的独立句子，"
     "消除其中的代词和模糊指代。\n"
     "如果当前提问的语义已经充分独立，不存在需要消解的指代，则原样返回用户的提问。\n"
+    "严禁回答问题、严禁补充事实、严禁输出解释。\n"
     "只输出重写后的句子，不要添加任何解释或格式。"
 )
+
+REWRITE_USER_PROMPT_TEMPLATE = (
+    "请仅执行“查询重写”，不要回答问题。\n"
+    "【规则】\n"
+    "1) 若当前提问已可独立理解，则原样返回当前提问。\n"
+    "2) 若存在代词、省略或模糊指代，结合历史做最小必要改写。\n"
+    "3) 不得输出“答案是”“根据上述”等回答性语句。\n"
+    "4) 仅输出一行纯文本，不要前缀、编号、引号或 Markdown。\n\n"
+    "【会话历史】\n"
+    "{history}\n\n"
+    "【当前提问】\n"
+    "{query}"
+)
+
+REWRITE_HISTORY_WINDOW = 10
 
 async def query_graph(query: str, session_id: str, db: AsyncSession) -> GraphResponse:
     """
@@ -152,13 +168,20 @@ async def _rewrite_query(query: str, history_messages: list[Message]) -> str:
     Returns:
         str: 重写后的查询语句（纯文本）。如果 LLM 调用失败，降级返回原始 query。
     """
-    # 组装消息列表：System Prompt → 历史消息 → 当前用户提问
-    messages = [{"role": "system", "content": REWRITE_SYSTEM_PROMPT}]
+    # 组装消息列表：System Prompt → 单条 User 指令（内含结构化历史与当前提问）
+    # 避免直接把完整对话作为多条 chat message 传入，降低模型“继续对话并直接回答”倾向。
+    recent_history = history_messages[-REWRITE_HISTORY_WINDOW:]
+    history_text = "\n".join(
+        f"{msg.role}: {(msg.content or '').strip()}"
+        for msg in recent_history
+        if (msg.content or "").strip()
+    ) or "(无)"
 
-    for msg in history_messages:
-        messages.append({"role": msg.role, "content": msg.content})
-
-    messages.append({"role": "user", "content": query})
+    rewrite_user_prompt = REWRITE_USER_PROMPT_TEMPLATE.format(history=history_text, query=query)
+    messages = [
+        {"role": "system", "content": REWRITE_SYSTEM_PROMPT},
+        {"role": "user", "content": rewrite_user_prompt},
+    ]
     logger.info("即将请求 MiniMax 执行 Query Rewrite: model=%s", settings.MINIMAX_MODEL)
     logger.info(
         "Query Rewrite 请求摘要: message_count=%d, last_role=%s, last_len=%d, last_preview=%s",
@@ -174,6 +197,7 @@ async def _rewrite_query(query: str, history_messages: list[Message]) -> str:
             model=settings.MINIMAX_MODEL,
             messages=messages,
             stream=False,
+            temperature=0.0,
         )
         elapsed = time.perf_counter() - t0
         logger.info("Query Rewrite LLM 调用耗时: %.2fs", elapsed)
@@ -183,9 +207,13 @@ async def _rewrite_query(query: str, history_messages: list[Message]) -> str:
 
         # 清理 MiniMax 模型可能输出的 <think>...</think> 思维链标签
         rewritten = re.sub(r"<think>.*?</think>", "", rewritten, flags=re.DOTALL).strip()
+        # 规整为单行文本，避免多行解释污染检索查询
+        rewritten = re.sub(r"\s+", " ", rewritten).strip()
 
-        # 防御空返回：如果 LLM 返回空字符串，降级使用原始 query
-        final_query = rewritten if rewritten else query
+        # 防御性兜底：若输出明显偏向“回答”而非“重写”，回退到原始 query
+        looks_like_answer = bool(re.match(r"^(答案|答：|根据|通常|可以|首先|这个问题)", rewritten))
+        too_long_for_rewrite = len(rewritten) > max(120, len(query) * 4)
+        final_query = query if (not rewritten or looks_like_answer or too_long_for_rewrite) else rewritten
         logger.info("Query Rewrite 最终结果: len=%d, preview=%s", len(final_query), preview_text(final_query))
         return final_query
 
