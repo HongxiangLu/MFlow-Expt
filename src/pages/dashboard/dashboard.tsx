@@ -18,7 +18,7 @@ import AppHeader from '../../components/app-header/app-header'
 import KnowledgeGraph from '../../components/knowledge-graph/knowledge-graph'
 import { useDialogueStoreController } from '../../store/dialogue-store'
 import mockjpg from '../../../mock/mock.jpg'
-import styles from './dashboarad.module.scss'
+import styles from './dashboard.module.scss'
 
 const artifactFacts = [
   { label: '文物编号', value: 'HNM-2024-0156' },
