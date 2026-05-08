@@ -264,6 +264,33 @@ def patch_mentioned_time_extractor(sp: Path) -> PatchResult:
     return _apply_text_patch(target, old, new, label="时间提取器负数时间戳修复")
 
 
+def patch_search_only_context(sp: Path) -> PatchResult:
+    """修复 use_combined_context 分支忽略 only_context 参数的 Bug。"""
+    target = sp / "m_flow" / "search" / "methods" / "search.py"
+
+    old = (
+        '        completion_fn = tools[0]\n'
+        '        combined_ctx = _merge_context_values(merged_context)\n'
+        '        answer = await completion_fn(query_text, combined_ctx, session_id=session_id)\n'
+        '\n'
+        '        return answer, combined_ctx, all_datasets'
+    )
+
+    new = (
+        '        completion_fn = tools[0]\n'
+        '        combined_ctx = _merge_context_values(merged_context)\n'
+        '\n'
+        '        if only_context:\n'
+        '            return None, combined_ctx, all_datasets\n'
+        '\n'
+        '        answer = await completion_fn(query_text, combined_ctx, session_id=session_id)\n'
+        '\n'
+        '        return answer, combined_ctx, all_datasets'
+    )
+
+    return _apply_text_patch(target, old, new, label="search only_context 修复")
+
+
 # ──────────────────────────────────────────────────────────────
 # 主函数
 # ──────────────────────────────────────────────────────────────
@@ -277,6 +304,7 @@ ALL_PATCHES = [
     patch_ui_download_url,
     patch_query_time_parser,
     patch_mentioned_time_extractor,
+    patch_search_only_context,
 ]
 
 ALL_FILES_RELATIVE = [
@@ -288,6 +316,7 @@ ALL_FILES_RELATIVE = [
     "m_flow/api/v1/ui/ui.py",
     "m_flow/retrieval/time/query_time_parser.py",
     "m_flow/retrieval/time/mentioned_time_extractor.py",
+    "m_flow/search/methods/search.py",
 ]
 
 

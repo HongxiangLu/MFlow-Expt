@@ -255,6 +255,108 @@ ts_ms = int(dt.timestamp() * 1000)
 ts_ms = int((dt - datetime(1970, 1, 1, tzinfo=timezone.utc)).total_seconds() * 1000)
 ```
 
+### 图谱检索的 `only_context` 逻辑缺陷
+
+在使用 `TRIPLET_COMPLETION` 模式并同时开启 `only_context=True` 与 `use_combined_context=True` 时，首次对话会触发 `500 Internal Server Error`，后端日志中出现 `instructor.core.InstructorRetryException` 及 Pydantic `ValidationError`。
+
+#### 报错原因
+
+这是 M-Flow SDK 内部 `search()` 函数的一个逻辑 Bug。三层原因构成了一条**链式触发**关系：第 1 点是根因——它导致了一次本不该发生的 LLM 调用；第 2 点解释了这次 LLM 调用为什么会以一种对模型苛刻的方式进行；第 3 点说明了我们使用的 MiniMax 模型为什么无法满足这种苛刻要求，最终导致报错。如果第 1 点的 Bug 不存在（即 `only_context=True` 被正确尊重），后面两点根本不会被触发。
+
+**1. `only_context` 参数在组合上下文模式下被忽略**
+
+首先解释两个关键参数的含义：
+
+- **`only_context`**：一个布尔开关。设为 `True` 时，表示调用方只需要从知识图谱中检索出原始的三元组/文本上下文数据，**不需要** M-Flow 再将这些上下文喂给 LLM 去生成一段自然语言回答。我们的后端在 `mflow_client.py` 中调用 `m_flow.search()` 时就是这样设置的——因为我们的业务架构是「检索归 M-Flow，生成归后端自己的 LLM 客户端」，两步解耦。
+- **`use_combined_context`**：另一个布尔开关。设为 `True` 时，表示如果用户拥有多个数据集（Dataset），M-Flow 会先分别从每个数据集中检索上下文，然后将所有结果**合并**为一份统一的上下文，再进行后续处理。设为 `False` 时，则各数据集的结果独立返回。
+
+问题出在 M-Flow 源码 `m_flow/search/methods/search.py` 的 `_authorized_search_impl` 函数中。这个函数内部有两条分支：
+
+```
+if use_combined_context:     ← 组合上下文分支（有 Bug）
+    ...收集各数据集上下文 → 合并 → 直接调用 completion_fn 生成回答（未检查 only_context）
+else:                        ← 标准分支（正常）
+    ...调用 _search_single_dataset → 内部正确检查了 only_context
+```
+
+当 `use_combined_context=True` 时，代码在合并完上下文后，**无条件**地调用了 `completion_fn(query_text, combined_ctx, ...)` 来让 LLM 生成回答。它完全没有检查 `only_context` 的值。这意味着即便调用方明确说「我只要上下文，别生成回答」，这条分支依然会强行启动 LLM 生成流程。
+
+**2. `instructor` 对 `str` 类型响应的 JSON Schema 包装机制**
+
+上一步中被错误触发的 `completion_fn`，其内部调用链路如下：
+
+```
+completion_fn (即 UnifiedTripletSearch.get_completion)
+  → generate_completion()          [completion.py]
+    → LLMService.extract_structured()  [LLMGateway.py]
+      → instructor 客户端.chat.completions.create(response_model=str)
+```
+
+这里的关键在于 `instructor` 库的工作原理。`instructor` 是一个用于约束 LLM 输出格式的中间件——它接收一个 Pydantic 模型（`response_model`）作为期望的输出结构，然后：
+
+1. 将该模型的字段定义转换为一段 JSON Schema，注入到发给 LLM 的提示词中；
+2. 要求 LLM 严格按照该 Schema 返回 JSON；
+3. 拿到 LLM 返回的 JSON 后，用 Pydantic 对其进行反序列化校验。
+
+当 `response_model=str`（即期望输出就是一个普通字符串）时，`instructor` 并不会简单地让 LLM 返回纯文本。它会将 `str` 包装为一个临时的 Pydantic 模型，该模型只有一个必填字段 `content`，对应的 JSON Schema 形如：
+
+```json
+{
+  "properties": {
+    "content": { "type": "string", "title": "Content" }
+  },
+  "required": ["content"]
+}
+```
+
+也就是说，`instructor` 实际上要求 LLM 返回 `{"content": "这里是回答内容"}` 这样的 JSON 结构，然后它再从中提取 `content` 字段的值作为最终的字符串返回。
+
+**3. MiniMax 模型无法稳定生成符合 `instructor` 要求的 JSON 结构**
+
+MiniMax-M2.7 模型在接收到上述 JSON Schema 约束后，并不能可靠地按照要求输出 `{"content": "..."}` 格式。它的实际输出可能是以下几种情况之一：
+
+- 直接输出纯文本回答（没有 JSON 包装）
+- 输出了 JSON，但字段名不对，例如 `{"question": "...", "answer": "..."}`
+- 输出了不完整或格式错误的 JSON
+
+无论是哪种情况，`instructor` 拿到 LLM 的原始输出后尝试用 Pydantic 解析时都会失败，抛出类似以下的校验错误：
+
+```
+ValidationError: 1 validation error for Response
+content
+  Field required [type=missing, loc=('content',), ...]
+```
+
+`instructor` 内置了重试机制（默认最多 5 次），每次失败后会将校验错误信息追加到提示词中，期望 LLM 在下一次尝试中修正输出格式。但 MiniMax 模型在多次重试后仍然无法产出合规的 JSON，最终 `instructor` 耗尽重试次数，抛出 `InstructorRetryException`，该异常一路上抛至 FastAPI 路由层，导致接口返回 `500 Internal Server Error`。
+
+#### 解决方案
+
+需要修改环境中的 M-Flow 源代码文件：
+
+**文件：`项目环境路径\Lib\site-packages\m_flow\search\methods\search.py`**
+
+定位到 `_authorized_search_impl` 函数中 `use_combined_context` 分支的末尾（第 398 行），在调用 `completion_fn` 之前增加 `only_context` 判断：
+
+```python
+# 修改前
+completion_fn = tools[0]
+combined_ctx = _merge_context_values(merged_context)
+answer = await completion_fn(query_text, combined_ctx, session_id=session_id)
+
+return answer, combined_ctx, all_datasets
+
+# 修改后 (尊重 only_context 参数，跳过不必要的 LLM 生成)
+completion_fn = tools[0]
+combined_ctx = _merge_context_values(merged_context)
+
+if only_context:
+    return None, combined_ctx, all_datasets
+
+answer = await completion_fn(query_text, combined_ctx, session_id=session_id)
+
+return answer, combined_ctx, all_datasets
+```
+
 # 项目数据迁移的注意事项
 
 将项目目录迁移至其他盘符（如从 `C:\` 移动到 `D:\`）后，调用 `m_flow.search()` 进行向量检索时可能出现以下现象：
