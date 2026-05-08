@@ -107,6 +107,26 @@ backend/
         *   **`nodeType` 过滤与映射**: M-Flow 返回的 `type` 字段可能包含内置类型或原始数据类型。后端需执行：(1) 过滤掉 M-Flow 的内置系统节点类型；(2) 将剩余类型映射至 `API.md` 定义的 12 种标准业务类型（如 `artifact`, `dynasty`）；(3) 对于无法匹配的类型，统一降级为 `other` 标识。
         *   **`centerNodeId`**: 由后端优先选取首个 `artifact` 类型节点；若不存在 `artifact`，则降级选取结果中的首个节点。
         *   **`edges`**: 将 M-Flow 的关系转换为带唯一 ID（如 `f"{source}_{label}_{target}"`）的标准 `GraphEdge`。
+    *   **图谱后处理过滤层** (`_filter_graph_nodes_and_edges`)：
+        M-Flow 图数据库返回的原始图谱数据中存在两类前端展示问题：(1) 不同节点可能具有相同的显示名称 (label)，导致前端力导向图中出现重叠或语义混淆；(2) 部分节点的 label 为纯 ASCII 标识符（如 M-Flow 内部生成的 Episode ID、系统占位符），不适合直接展示给终端用户。因此在原始数据解析完成后、构建最终 `GraphResponse` 之前，插入一层后处理过滤，按以下顺序严格执行三阶段清洗：
+
+        1.  **ASCII 过滤**（节点级）：移除 `label.isascii() == True` 的节点。判定标准为 Python 内置的 `str.isascii()` 方法，即字符串中所有字符的 Unicode 码点均在 U+0000~U+007F 范围内（涵盖英文字母、数字、ASCII 标点）。被过滤的典型示例：`"Episode_42"`、`"bronze_vessel"`、`"has_part"`；保留的典型示例：`"青铜器"`、`"商代(Shang)"`、`"鼎·簋组合"`。
+
+        2.  **同名去重**（节点级，基于 label 聚合）：对具有相同 label 的节点，仅保留 M-Flow **原始类型** (`raw_type`) 优先级最高的一个。优先级映射表如下（数值越小优先级越高）：
+
+            | M-Flow 原始类型 | 优先级 | 说明 |
+            |:---|:---:|:---|
+            | `Episode`   | 0 | 语义切分单元，信息密度最高 |
+            | `Facet`     | 1 | Episode 下的主题切面 |
+            | `FacetPoint`| 2 | Facet 的细粒度信息点 |
+            | `Entity`    | 3 | 原子实体节点 |
+            | 其他         | 99 | 默认最低优先级 |
+
+            > **设计决策**：去重基于映射前的 M-Flow 原始类型而非映射后的业务类型 (`nodeType`)，因为 Episode/Facet/FacetPoint/Entity 在 `STANDARD_NODE_TYPES` 映射后均归为 `"other"`，无法区分优先级。为此在节点 dict 中注入 `_raw_type` 临时字段传递原始类型信息，过滤完成后通过 `dict.pop()` 自动清理，确保不泄露到最终的 API 响应中。
+
+        3.  **悬挂边清理**（边级）：上述两步可能删除部分节点，导致某些边的 `source` 或 `target` 指向不存在的节点（即"悬挂边" / dangling edge）。此步骤利用过滤后的有效节点 ID 集合高效过滤掉所有悬挂边，保持图结构的引用完整性。
+
+        > **数据流位置**：过滤层位于 `mflow_client.get_graph()` 内部，在 M-Flow 原始 `graphs` 数据解析完成（节点/边列表构建完毕）之后、`graphId` 生成与 `centerNodeId` 选举之前。过滤层仅在 Facade 层内部使用，不暴露给上层 `graph_service.py` 或 Controller 层。
 
 > **MiniMax 思维链标签处理**: MiniMax-M2.7 在推理时会输出 `<think>...</think>` 包裹的思维链内容。流式场景下思维链可能跨越多个 chunk，`chat_service.py` 使用布尔状态标记 `_in_think` 逐 chunk 追踪过滤；非流式场景（Query Rewrite）使用正则 `re.sub` 清理。消息落盘前也会做防御性正则清理。详见 `README.md` 中的兼容性问题说明。
 
