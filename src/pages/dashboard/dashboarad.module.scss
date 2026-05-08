@@ -255,12 +255,23 @@ $copy: #d4d4d8;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   overflow: hidden;
   border-right: 1px solid $border;
   background:
     radial-gradient(circle at 50% 35%, rgba(212, 175, 55, 0.08), transparent 35%),
     linear-gradient(180deg, #050505 0%, #0a0a0a 48%, #0c0c0c 100%);
+}
+
+.chatPanel::after {
+  position: absolute;
+  right: 12px;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  height: 118px;
+  content: "";
+  background: linear-gradient(180deg, rgba(10, 10, 10, 0), rgba(10, 10, 10, 0.94) 42%, rgba(10, 10, 10, 0.98));
+  pointer-events: none;
 }
 
 .chatContent {
@@ -269,7 +280,7 @@ $copy: #d4d4d8;
   min-height: 0;
   margin: 0;
   padding-top: 48px;
-  padding-bottom: 24px;
+  padding-bottom: 104px;
   overflow-x: hidden;
   overflow-y: auto;
   overflow-anchor: none;
@@ -534,11 +545,16 @@ $copy: #d4d4d8;
 }
 
 .composer {
+  position: absolute;
+  right: 0;
+  bottom: 24px;
+  left: 0;
   width: min(672px, calc(100% - 64px));
   height: 54px;
   display: flex;
   align-items: center;
-  margin: 0 auto 24px;
+  margin: 0 auto;
+  z-index: 3;
   border: 1px solid $border;
   border-radius: 8px;
   background: rgba(26, 26, 26, 0.9);
@@ -709,6 +725,8 @@ $copy: #d4d4d8;
 }
 
 .bottomNav {
+  position: relative;
+  z-index: 5;
   height: 64px;
   border-top: 1px solid $border;
   background: $surface;
@@ -829,6 +847,7 @@ $copy: #d4d4d8;
   .chatContent {
     width: 100%;
     padding-top: 34px;
+    padding-bottom: 88px;
   }
 
   .chatContent > .chatHero,

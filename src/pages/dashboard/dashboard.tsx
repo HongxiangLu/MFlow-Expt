@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Children, cloneElement, isValidElement, useState, type ReactElement, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import {
   Archive,
@@ -43,6 +43,44 @@ const navItems = [
   { label: '导览', icon: Map },
   { label: '展览', icon: UserRound },
 ]
+
+const markdownCursorMarker = '[[STREAM_CURSOR]]'
+
+function renderStreamCursor() {
+  return <span className={styles.streamCursor} aria-hidden="true" />
+}
+
+function renderMarkdownChildrenWithCursor(children: ReactNode): ReactNode {
+  return Children.map(children, (child) => {
+    if (typeof child === 'string') {
+      if (!child.includes(markdownCursorMarker)) {
+        return child
+      }
+
+      const parts = child.split(markdownCursorMarker)
+
+      return parts.flatMap((part, index) =>
+        index === parts.length - 1 ? [part] : [part, renderStreamCursor()],
+      )
+    }
+
+    if (isValidElement(child)) {
+      const element = child as ReactElement<{ children?: ReactNode }>
+
+      return cloneElement(element, undefined, renderMarkdownChildrenWithCursor(element.props.children))
+    }
+
+    return child
+  })
+}
+
+const markdownComponents = {
+  p: ({ children }: { children?: ReactNode }) => <p>{renderMarkdownChildrenWithCursor(children)}</p>,
+  h1: ({ children }: { children?: ReactNode }) => <h1>{renderMarkdownChildrenWithCursor(children)}</h1>,
+  h2: ({ children }: { children?: ReactNode }) => <h2>{renderMarkdownChildrenWithCursor(children)}</h2>,
+  h3: ({ children }: { children?: ReactNode }) => <h3>{renderMarkdownChildrenWithCursor(children)}</h3>,
+  li: ({ children }: { children?: ReactNode }) => <li>{renderMarkdownChildrenWithCursor(children)}</li>,
+}
 
 export default function MuseumAiPage() {
   const {
@@ -170,8 +208,9 @@ export default function MuseumAiPage() {
                     <div className={styles.messageBubble}>
                       {message.role === 'assistant' ? (
                         <div className={styles.markdownMessage}>
-                          <ReactMarkdown>{message.content}</ReactMarkdown>
-                          {message.isStreaming && <span className={styles.streamCursor} aria-hidden="true" />}
+                          <ReactMarkdown components={markdownComponents}>
+                            {message.isStreaming ? `${message.content}${markdownCursorMarker}` : message.content}
+                          </ReactMarkdown>
                         </div>
                       ) : (
                         <p>

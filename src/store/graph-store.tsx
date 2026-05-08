@@ -107,8 +107,8 @@ function buildGraph(graphResponse: GraphResponse | null) {
       label: node.label,
       size: getNodeSize(node.nodeType, isCenterNode, degrees[node.id] ?? 0),
       color: getNodeColor(node.nodeType),
-      x: isCenterNode ? 0 : Math.cos(index) * 7,
-      y: isCenterNode ? 0 : Math.sin(index) * 7,
+      x: isCenterNode ? 0 : Math.cos(index) * 4,
+      y: isCenterNode ? 0 : Math.sin(index) * 4,
     })
   })
 
@@ -131,8 +131,8 @@ function buildGraph(graphResponse: GraphResponse | null) {
     forceAtlas2.assign(graph, {
       iterations: 160,
       settings: {
-        gravity: 1.2,
-        scalingRatio: 5.5,
+        gravity: 2.0,
+        scalingRatio: 2.5,
         slowDown: 6,
         edgeWeightInfluence: 0.85,
       },
