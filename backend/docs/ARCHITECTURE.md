@@ -162,6 +162,8 @@ client = AsyncOpenAI(
     *   **代价**：跨句推理、隐式指代、图结构关联能力弱于 EPISODIC/TRIPLET，复杂问题召回质量可能下降。
     *   **工程建议**：优先用于首轮、短问句、强关键词查询；复杂查询可回退 EPISODIC（分层策略）。
 
+*   **当前现状（已落地）**：后端 `services/mflow_client.py` 的 `get_context()` 已全量切换为 `RecallMode.CHUNKS_LEXICAL`，同时移除了仅对 EPISODIC 有意义的 `display_mode` 和 `wide_search_top_k` 传参。图谱检索 `get_graph()` 保持 `TRIPLET_COMPLETION` 不变。
+
 ### 4.2 缩小检索范围：可控参数清单（基于 m_flow 源码）
 
 以下参数来自 `m_flow.api.v1.search.search()` 与 `m_flow.search.methods.get_recall_mode_tools()` / 各 retriever 实现，可直接用于降时：
@@ -175,7 +177,7 @@ client = AsyncOpenAI(
    * 含义：向量召回阶段的候选池大小（粗召回）。
    * 位置：`search()` → `get_recall_mode_tools()` → `UnifiedTripletSearch` / `EpisodicConfig`。
    * 建议：从 100 下调到 30~60，通常能明显降低向量检索与图投影耗时。
-   * **当前现状（已落地）**：后端 `services/mflow_client.py` 已统一设置 `wide_search_top_k=30`（`get_context` 与 `get_graph` 均生效）。
+   * **当前现状（已落地）**：后端 `services/mflow_client.py` 已设置 `wide_search_top_k=30`（仅 `get_graph` 生效；`get_context` 切换至 `CHUNKS_LEXICAL` 后不再需要此参数）。
 
 3. **`collections`**（EPISODIC/TRIPLET）
    * 含义：限定要检索的向量集合字段。
@@ -190,7 +192,7 @@ client = AsyncOpenAI(
 5. **`display_mode` / `max_facets_per_episode` / `max_points_per_facet`**（EPISODIC）
    * 含义：控制 episodic 输出粒度与上下文体积。
    * 建议：优先 `display_mode="summary"`，并降低 facet/point 上限，减少序列化与 Prompt 膨胀。
-   * **当前现状（已落地）**：后端 `services/mflow_client.py` 已统一设置 `display_mode="summary"`（EPISODIC 上下文检索生效，图谱链路保持兼容传参）。
+   * **当前现状（已落地）**：后端 `services/mflow_client.py` 已设置 `display_mode="summary"`（仅 `get_graph` 图谱链路保持兼容传参；`get_context` 切换至 `CHUNKS_LEXICAL` 后不再需要此参数）。
 
 6. **`enable_hybrid_search` / `enable_time_bonus` / `enable_adaptive_weights`**（EPISODIC）
    * 含义：启用额外检索与重排增强能力（质量优先，但计算更重）。
@@ -278,12 +280,11 @@ client = AsyncOpenAI(
 
 ## 5. 当前实施现状与后续建议 (Current State & Next Steps)
 
-当前代码已完成 MVP 主链路落地（真实 M-Flow 接入、SSE 单字符流、图谱查询与 Query Rewrite 解耦、日志摘要化与检索参数收敛），并已完成统一耗时埋点。
+当前代码已完成 MVP 主链路落地（真实 M-Flow 接入、SSE 单字符流、图谱查询与 Query Rewrite 解耦、日志摘要化与检索参数收敛），并已完成首轮性能优化（Chat 检索模式切换至 CHUNKS_LEXICAL、统一耗时埋点）。
 
 后续建议聚焦于性能与工程化增强：
 
 1.  **缓存落地**：在 `services/mflow_client.py` 增加短 TTL 缓存（如 `cachetools.TTLCache`），优先覆盖热点重复查询。
-2.  **检索模式切换**：将 Chat 上下文检索从 `EPISODIC` 全量切换至 `CHUNKS_LEXICAL`，释放并发资源。
-3.  **检索策略分层**：基于耗时埋点数据，评估是否需要按查询复杂度在 `CHUNKS_LEXICAL` 与 `EPISODIC` 间动态切换，平衡速度与质量。
-4.  **前端并发治理**：优化 `/api/chat` 与 `/api/graph/query` 的触发时机，减少资源争抢。
+2.  **检索策略分层**：基于耗时埋点数据，评估是否需要按查询复杂度在 `CHUNKS_LEXICAL` 与 `EPISODIC` 间动态切换，平衡速度与质量。
+3.  **前端并发治理**：优化 `/api/chat` 与 `/api/graph/query` 的触发时机，减少资源争抢。
 
