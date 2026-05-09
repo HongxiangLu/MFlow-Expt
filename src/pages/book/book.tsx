@@ -1,5 +1,5 @@
 import { useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
-import { ChevronLeft, ChevronRight, GripVertical } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 import AppHeader from '../../components/app-header/app-header'
 import styles from './book.module.scss'
 
@@ -78,9 +78,7 @@ export default function BookPage() {
             aria-label="Hide left column"
             aria-expanded={!isLeftCollapsed}
             onClick={() => setIsLeftCollapsed(true)}
-          >
-            <ChevronLeft size={18} />
-          </button>
+          />
         </aside>
         <section className={styles.centerColumn} aria-label="Book center column" />
         <aside className={styles.rightColumn} aria-label="Book right column">
@@ -89,9 +87,7 @@ export default function BookPage() {
             type="button"
             aria-label="Resize right column"
             onPointerDown={handleRightResizePointerDown}
-          >
-            <GripVertical size={16} />
-          </button>
+          />
         </aside>
       </section>
     </main>

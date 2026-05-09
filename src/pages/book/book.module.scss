@@ -82,11 +82,15 @@ $border: #e1e3e6;
 
 .leftCollapseButton {
   position: absolute;
-  top: 16px;
-  right: 16px;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  width: 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: pointer;
 }
 
 .restoreLeftButton {
@@ -115,21 +119,16 @@ $border: #e1e3e6;
   position: absolute;
   top: 0;
   bottom: 0;
-  left: -7px;
+  left: -5px;
   z-index: 2;
-  width: 14px;
+  width: 10px;
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: #9ca3af;
   cursor: ew-resize;
   touch-action: none;
 }
 
-.rightResizeHandle:hover,
-.rightResizeHandle:focus-visible,
-.leftCollapseButton:hover,
-.leftCollapseButton:focus-visible,
 .restoreLeftButton:hover,
 .restoreLeftButton:focus-visible {
   border-color: #c9ccd2;
@@ -138,9 +137,55 @@ $border: #e1e3e6;
   outline: none;
 }
 
+.leftCollapseButton::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border-top: 6px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 6px solid transparent;
+  opacity: 0;
+  transition:
+    border-right-color 120ms ease,
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+
+.leftCollapseButton:hover,
+.leftCollapseButton:focus-visible {
+  background: transparent;
+  outline: none;
+}
+
+.leftCollapseButton:hover::before,
+.leftCollapseButton:focus-visible::before {
+  border-right-color: #8f949c;
+  opacity: 1;
+  transform: translateX(-1px);
+}
+
+.rightResizeHandle::before {
+  content: "";
+  width: 2px;
+  height: 36px;
+  border-radius: 999px;
+  background: transparent;
+  transition:
+    background 120ms ease,
+    height 120ms ease;
+}
+
 .rightResizeHandle:hover,
 .rightResizeHandle:focus-visible {
-  background: rgba(255, 255, 255, 0.72);
+  background: transparent;
+  outline: none;
+}
+
+.rightResizeHandle:hover::before,
+.rightResizeHandle:focus-visible::before,
+.rightResizing .rightResizeHandle::before {
+  height: 52px;
+  background: #a8adb5;
 }
 
 @media (max-width: 1199px) {
