@@ -291,13 +291,63 @@ def patch_search_only_context(sp: Path) -> PatchResult:
     return _apply_text_patch(target, old, new, label="search only_context 修复")
 
 
+def patch_entity_types_rules(sp: Path) -> PatchResult:
+    """修改节点实体类型提示词 → 强制英文分类输出。"""
+    target = sp / "m_flow" / "llm" / "prompts" / "write_entity_descriptions.txt"
+
+    old = (
+        "RULES:\n"
+        "1. Use EXACT entity names from ENTITY_NAMES (do not modify or translate)\n"
+        "2. Description must be grounded in SOURCE_TEXT facts\n"
+        "3. If entity cannot be described from SOURCE_TEXT, provide brief generic definition\n"
+        "4. Each entity must have exactly one entity_type\n"
+        "\n"
+        "LANGUAGE: Output language MUST match SOURCE_TEXT. If Chinese input, output Chinese descriptions."
+    )
+
+    new = (
+        "RULES:\n"
+        "1. Use EXACT entity names from ENTITY_NAMES (do not modify or translate)\n"
+        "2. Description must be grounded in SOURCE_TEXT facts\n"
+        "3. If entity cannot be described from SOURCE_TEXT, provide brief generic definition\n"
+        "4. Each entity must have exactly one entity_type. The entity_type MUST be one of the exact English keys listed above (e.g., \"artifact\", \"dynasty\"), even if the description is in Chinese.\n"
+        "\n"
+        "LANGUAGE: Output language MUST match SOURCE_TEXT. If Chinese input, output Chinese descriptions (but keep entity_type in English)."
+    )
+
+    return _apply_text_patch(target, old, new, label="实体类型规则提示词")
+
+
+def patch_entity_type_pydantic_schema(sp: Path) -> PatchResult:
+    """修改 ConceptDescription Pydantic 模型描述，防止大模型幻觉。"""
+    target = sp / "m_flow" / "memory" / "episodic" / "models.py"
+
+    old = (
+        '    entity_type: str = Field(\n'
+        '        default="Thing",\n'
+        '        description="Entity type category, e.g., \'Person\', \'Organization\', \'Location\', \'Event\', \'Product\', \'Entity\', \'Thing\'.",\n'
+        '    )'
+    )
+
+    new = (
+        '    entity_type: str = Field(\n'
+        '        default="other",\n'
+        '        description="Entity type category. Must exactly match one of the English keys provided in the ENTITY TYPES section of the prompt.",\n'
+        '    )'
+    )
+
+    return _apply_text_patch(target, old, new, label="实体 Schema 描述")
+
+
 # ──────────────────────────────────────────────────────────────
 # 主函数
 # ──────────────────────────────────────────────────────────────
 
 ALL_PATCHES = [
     patch_entity_types,
+    patch_entity_types_rules,
     patch_node_guidelines,
+    patch_entity_type_pydantic_schema,
     patch_llm_gateway_system_role,
     patch_adapter_build_messages,
     patch_version_package_name,
@@ -310,6 +360,7 @@ ALL_PATCHES = [
 ALL_FILES_RELATIVE = [
     "m_flow/llm/prompts/write_entity_descriptions.txt",
     "m_flow/llm/prompts/knowledge_graph_extractor.txt",
+    "m_flow/memory/episodic/models.py",
     "m_flow/llm/LLMGateway.py",
     "m_flow/llm/backends/litellm_instructor/llm/openai/adapter.py",
     "m_flow/version.py",

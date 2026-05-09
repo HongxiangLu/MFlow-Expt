@@ -38,6 +38,93 @@ STANDARD_NODE_TYPES = {
     "craft", "inscription", "usage", "concept", "person", "collection"
 }
 
+
+def _normalize_standard_node_type(value: str | None) -> str | None:
+    """将候选类型归一化为标准业务类型，无法匹配时返回 None。"""
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().lower()
+    return normalized if normalized in STANDARD_NODE_TYPES else None
+
+
+def _extract_type_from_node_attributes(attributes: dict) -> str | None:
+    """从节点 attributes 中提取业务类型（若存在）。"""
+    if not isinstance(attributes, dict):
+        return None
+
+    # 优先读取显式字段
+    for key in ("entity_type", "entityType", "type_name", "typeName", "category"):
+        mapped = _normalize_standard_node_type(attributes.get(key))
+        if mapped:
+            return mapped
+
+    # 兼容 is_a 以属性形式挂在节点上的场景
+    is_a = attributes.get("is_a")
+    if isinstance(is_a, str):
+        return _normalize_standard_node_type(is_a)
+    if isinstance(is_a, dict):
+        for key in ("name", "label", "type", "entity_type"):
+            mapped = _normalize_standard_node_type(is_a.get(key))
+            if mapped:
+                return mapped
+
+    return None
+
+
+def _infer_types_from_is_a_edges(raw_nodes: list[dict], raw_edges: list[dict]) -> dict[str, str]:
+    """通过 Entity --is_a--> EntityType 关系推断节点业务类型。"""
+    entity_type_by_id: dict[str, str] = {}
+
+    # 先识别 EntityType 节点自身对应的业务类型（通常来自 label/name）
+    for node in raw_nodes:
+        node_id = node.get("id")
+        if not node_id:
+            continue
+
+        raw_type = str(node.get("type", "")).lower()
+        if raw_type != "entitytype":
+            continue
+
+        attributes = node.get("attributes", {})
+        candidates = (
+            node.get("label"),
+            attributes.get("name") if isinstance(attributes, dict) else None,
+            attributes.get("entity_type") if isinstance(attributes, dict) else None,
+        )
+        for candidate in candidates:
+            mapped = _normalize_standard_node_type(candidate)
+            if mapped:
+                entity_type_by_id[node_id] = mapped
+                break
+
+    inferred: dict[str, str] = {}
+
+    # 再根据 is_a 边把类型投射回业务节点
+    for edge in raw_edges:
+        if not isinstance(edge, dict):
+            continue
+
+        label = str(edge.get("label", "")).strip().lower()
+        if label not in {"is_a", "isa"}:
+            continue
+
+        source = edge.get("source")
+        target = edge.get("target")
+        if not source or not target:
+            continue
+
+        source_mapped = entity_type_by_id.get(source)
+        target_mapped = entity_type_by_id.get(target)
+
+        # 兼容边方向不一致：只要一端是 EntityType，另一端就是待赋类型节点
+        if source_mapped and not target_mapped and target not in inferred:
+            inferred[target] = source_mapped
+        elif target_mapped and not source_mapped and source not in inferred:
+            inferred[source] = target_mapped
+
+    return inferred
+
+
 # =============================================================================
 # 图谱后处理过滤层 (Graph Post-Processing Filter)
 # =============================================================================
@@ -317,18 +404,33 @@ async def get_graph(query: str) -> dict:
                 len(graph_data.get("edges", [])),
             )
                 
+            raw_nodes = graph_data.get("nodes", [])
+            raw_edges = graph_data.get("edges", [])
+            inferred_types = _infer_types_from_is_a_edges(raw_nodes, raw_edges)
+
             # 处理并转化节点 (Nodes)
-            for node in graph_data.get("nodes", []):
+            for node in raw_nodes:
                 # 获取引擎返回的原始实体类型，转小写以统一匹配格式
                 raw_type = node.get("type", "").lower()
-                
+                node_id = node.get("id")
+                attributes = node.get("attributes", {})
+                 
                 # 过滤掉内部系统级实体 (如 __SYSTEM__ 类型的内部节点)
                 if raw_type.startswith("__"):
                     continue
-                    
-                # NodeType 映射：如果不属于 12 种标准类型，则归档为 "other"
-                node_type = raw_type if raw_type in STANDARD_NODE_TYPES else "other"
-                
+
+                # NodeType 映射优先级：
+                # 1) is_a -> EntityType 推断
+                # 2) 节点 attributes 内显式 entity_type
+                # 3) 原始 type（仅在其本身就是标准业务类型时）
+                # 4) 兜底 other
+                node_type = (
+                    inferred_types.get(node_id)
+                    or _extract_type_from_node_attributes(attributes)
+                    or _normalize_standard_node_type(raw_type)
+                    or "other"
+                )
+                 
                 # 构建节点字典，附带 _raw_type 临时字段。
                 # _raw_type 字段生命周期：
                 #   创建 → 节点构建时注入（此处）
@@ -337,15 +439,15 @@ async def get_graph(query: str) -> dict:
                 # 该字段不属于 GraphNode Pydantic 模型的 API 契约，
                 # 若未正确清理将导致 Pydantic 校验告警（model_config 未设置 extra="allow"）。
                 nodes.append({
-                    "id": node.get("id"),
-                    "label": node.get("label") or node.get("id"),
+                    "id": node_id,
+                    "label": node.get("label") or node_id,
                     "nodeType": node_type,
                     "_raw_type": raw_type,
                 })
                 logger.info("图谱节点映射: mapped=%s", preview_text(str(nodes[-1])))
-            
+             
             # 处理并转化边 (Edges)
-            for edge in graph_data.get("edges", []):
+            for edge in raw_edges:
                 source = edge.get("source")
                 target = edge.get("target")
                 label = edge.get("label", "related")

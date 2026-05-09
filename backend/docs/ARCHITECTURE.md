@@ -112,7 +112,11 @@ backend/
     *   **图谱检索**: 使用 `m_flow.search(query, query_type=RecallMode.TRIPLET_COMPLETION, verbose=True)` 获取包含节点与边的 `CombinedSearchResult` 对象。
     *   **数据映射逻辑**:
         *   **`graphId`**: 由后端基于查询字符串的 Hash (如 SHA-256) 生成，确保同一查询在前端具有稳定的图谱标识。
-        *   **`nodeType` 过滤与映射**: M-Flow 返回的 `type` 字段可能包含内置类型或原始数据类型。后端需执行：(1) 过滤掉 M-Flow 的内置系统节点类型；(2) 将剩余类型映射至 `API.md` 定义的 12 种标准业务类型（如 `artifact`, `dynasty`）；(3) 对于无法匹配的类型，统一降级为 `other` 标识。
+        *   **`nodeType` 过滤与映射**: 由于 M-Flow 底层图数据库的实体分类字段可能存在语义错位（系统的图节点类 `Entity` 被误认为业务类型），后端在解析时不再单一依赖 `node.type`，而是设计了**四级降级管线**来提取真实的语义类型：
+            1. **`is_a` 关系推断**：针对部分版本 M-Flow 将类型拆分为独立 `EntityType` 节点的行为，通过寻找由实体指向分类的 `is_a` / `isa` 边自动捕获真实分类。
+            2. **显式属性提取**：读取节点 `attributes` 字典中由 LLM 抽取的 `entity_type`, `category` 等字段值。
+            3. **原始类映射**：尝试将 M-Flow 返回的底层 `node.type` 直接匹配为标准业务类型（作为对特殊直存节点的兼容）。
+            4. **兜底降级**：若上述步骤全部失败，或解析出的类别不在 `API.md` 定义的 12 种标准业务类型中，统一降级为 `other`，保障前端渲染安全。
         *   **`centerNodeId`**: 由后端优先选取首个 `artifact` 类型节点；若不存在 `artifact`，则降级选取结果中的首个节点。
         *   **`edges`**: 将 M-Flow 的关系转换为带唯一 ID（如 `f"{source}_{label}_{target}"`）的标准 `GraphEdge`。
     *   **图谱后处理过滤层** (`_filter_graph_nodes_and_edges`)：

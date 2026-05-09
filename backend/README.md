@@ -102,6 +102,58 @@ ENTITY TYPES (choose one):
    artifact, dynasty, material, category, pattern, site, craft, inscription, usage, concept, person, collection, other.
 ```
 
+#### 修复节点分类全部变为 `other` 的问题
+
+在某些大语言模型（如 MiniMax）处理中文文本时，可能会出现所有提取的节点类型都被判定为 `other` 的问题。这主要是由于底层的两处指令冲突导致大模型产生困惑：
+
+1. **Pydantic Schema 与系统提示词冲突**：M-Flow 底层用于约束大语言模型 JSON 输出的 Schema 模型（位于 `models.py` 的 `ConceptDescription.entity_type` 字段）中，自带的注释包含了诸如 `'Person', 'Organization', 'Location'` 等预设示例，这与我们在提示词中重写的业务分类（`artifact`, `dynasty` 等）发生了直接冲突。
+2. **中英文翻译导致的回退**：提示词底层强制要求输出语言与源文本保持一致（`Output language MUST match SOURCE_TEXT`）。当处理中文输入时，模型试图将分类名称也翻译为中文（如把“artifact”翻译成“文物”），由于不匹配系统规定的英文分类，或者干脆不知道选哪个，模型最终选择了默认的保底选项 `other`。
+
+为了彻底解决这一问题，还需要对 M-Flow 的 Schema 和提示词补充以下约束规则：
+
+*   **修改目标文件三**：`项目环境路径\Lib\site-packages\m_flow\memory\episodic\models.py`
+
+定位到 `ConceptDescription` 类的 `entity_type` 字段定义的位置（第 385 行）：
+
+```python
+# 修改前
+    entity_type: str = Field(
+        default="Thing",
+        description="Entity type category, e.g., 'Person', 'Organization', 'Location', 'Event', 'Product', 'Entity', 'Thing'.",
+    )
+
+# 修改后 (消除示例干扰并强制匹配提示词)
+    entity_type: str = Field(
+        default="other",
+        description="Entity type category. Must exactly match one of the English keys provided in the ENTITY TYPES section of the prompt.",
+    )
+```
+
+*   **完善目标文件一**：`项目环境路径\Lib\site-packages\m_flow\llm\prompts\write_entity_descriptions.txt`
+
+定位到提示词底部的 `RULES` 和 `LANGUAGE` 部分（第 34 行）：
+
+```text
+# 修改前
+RULES:
+1. Use EXACT entity names from ENTITY_NAMES (do not modify or translate)
+2. Description must be grounded in SOURCE_TEXT facts
+3. If entity cannot be described from SOURCE_TEXT, provide brief generic definition
+4. Each entity must have exactly one entity_type
+
+LANGUAGE: Output language MUST match SOURCE_TEXT. If Chinese input, output Chinese descriptions.
+
+# 修改后 (增加对 entity_type 必须输出英文的强制指令)
+RULES:
+1. Use EXACT entity names from ENTITY_NAMES (do not modify or translate)
+2. Description must be grounded in SOURCE_TEXT facts
+3. If entity cannot be described from SOURCE_TEXT, provide brief generic definition
+4. Each entity must have exactly one entity_type. The entity_type MUST be one of the exact English keys listed above (e.g., "artifact", "dynasty"), even if the description is in Chinese.
+
+LANGUAGE: Output language MUST match SOURCE_TEXT. If Chinese input, output Chinese descriptions (but keep entity_type in English).
+```
+
+
 ### 关系 (Edge) 的构建逻辑
 
 M-Flow 中的关系不仅仅有结构化类型（如 `relationship_name`），还会被赋予详尽的自然语言描述（`edge_text`）和数值权重（`weight`）。这些描述构成了图谱能直接回答复杂语义关联的基础。
@@ -152,7 +204,7 @@ M-Flow 支持直接跳过生成步骤获取上下文，其底层提供了以下�
 
 修改环境内的 M-Flow 源代码，人为将 `system` 指令前置拼接并降级合并为 `user` 角色。需要修改以下三个底层文件：
 
-**文件 1：`项目环境路径\Lib\site-packages\m_flow\llm\LLMGateway.py`**
+**修改目标文件四：`项目环境路径\Lib\site-packages\m_flow\llm\LLMGateway.py`**
 
 定位到 `complete_text` 方法中构建 `messages` 的位置（第 144 行）：
 
@@ -169,7 +221,7 @@ messages = [
 ]
 ```
 
-**文件 2：`项目环境路径\Lib\site-packages\m_flow\llm\backends\litellm_instructor\llm\openai\adapter.py`**
+**修改目标文件五：`项目环境路径\Lib\site-packages\m_flow\llm\backends\litellm_instructor\llm\openai\adapter.py`**
 
 定位到 `_build_messages` 方法（第 211 行）：
 
@@ -194,9 +246,9 @@ def _build_messages(self, user_input: str, system_prompt: str) -> list:
 
 若需要执行 `mflow -ui` 启动内置可视化界面，由于底层包名变更及 GitHub 仓库所有者迁移，需要手动对环境中的 M-Flow 源代码进行以下两处修正：
 
-**1. 修正版本获取包名**
+**修正版本获取包名**
 
-*   **文件路径**：`项目环境路径\Lib\site-packages\m_flow\version.py`
+*   **修改目标文件六**：`项目环境路径\Lib\site-packages\m_flow\version.py`
 
 *   **修改点**：定位到第 30 行，将 `importlib.metadata.version` 的参数由旧包名改为新包名。
 
@@ -208,9 +260,9 @@ _CACHED = importlib.metadata.version("m_flow")
 _CACHED = importlib.metadata.version("mflow-ai")
 ```
 
-**2. 修正 UI 静态资源下载地址**
+**修正 UI 静态资源下载地址**
 
-*   **文件路径**：`项目环境路径\Lib\site-packages\m_flow\api\v1\ui\ui.py`
+*   **修改目标文件七**：`项目环境路径\Lib\site-packages\m_flow\api\v1\ui\ui.py`
 
 *   **修改点**：定位到第 110 行，更新 GitHub 仓库的所有者名称。
 
@@ -228,9 +280,9 @@ url = f"https://github.com/FlowElement-ai/m_flow/archive/refs/tags/v{clean}.zip"
 
 若遇到此类报错，需要对环境中的两个核心文件进行手动修正：
 
-**1. 修改时间解析器**
+**修改时间解析器**
 
-*   **文件路径**：`项目环境路径\Lib\site-packages\m_flow\retrieval\time\query_time_parser.py`
+*   **修改目标文件八**：`项目环境路径\Lib\site-packages\m_flow\retrieval\time\query_time_parser.py`
 *   **修改点**：定位到第 992 行，改用 `timedelta` 计算偏移量以兼容负数时间戳。
 
 ```python
@@ -242,9 +294,9 @@ from datetime import timedelta
 now_dt = datetime(1970, 1, 1, tzinfo=timezone.utc) + timedelta(seconds=now_ms / 1000)
 ```
 
-**2. 修改时间提取器（防御性修正）**
+**修改时间提取器（防御性修正）**
 
-*   **文件路径**：`项目环境路径\Lib\site-packages\m_flow\retrieval\time\mentioned_time_extractor.py`
+*   **修改目标文件九**：`项目环境路径\Lib\site-packages\m_flow\retrieval\time\mentioned_time_extractor.py`
 *   **修改点**：定位到第 127 行，避免直接调用 `.timestamp()`。
 
 ```python
@@ -333,7 +385,7 @@ content
 
 需要修改环境中的 M-Flow 源代码文件：
 
-**文件：`项目环境路径\Lib\site-packages\m_flow\search\methods\search.py`**
+**修改目标文件十：`项目环境路径\Lib\site-packages\m_flow\search\methods\search.py`**
 
 定位到 `_authorized_search_impl` 函数中 `use_combined_context` 分支的末尾（第 398 行），在调用 `completion_fn` 之前增加 `only_context` 判断：
 
