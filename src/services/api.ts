@@ -2,6 +2,7 @@ import axios from 'axios'
 
 export const apiPaths = {
   chat: '/api/chat',
+  bookList: '/api/books',
   graphQuery: '/api/graph/query',
 } as const
 

@@ -5,6 +5,12 @@ export type {
 } from './api'
 
 export type {
+  BookChapter,
+  BookListItem,
+  BookListResponse,
+} from './book'
+
+export type {
   ChatFinishReason,
   ChatRequest,
   ChatSseErrorCode,
