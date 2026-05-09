@@ -17,9 +17,19 @@ $border: #e1e3e6;
 }
 
 .workspace {
+  position: relative;
   height: calc(100svh - 56px);
   display: grid;
-  grid-template-columns: 380px minmax(440px, 1fr) 440px;
+  grid-template-columns: 240px minmax(440px, 1fr) var(--right-column-width, 440px);
+  transition: grid-template-columns 360ms ease;
+}
+
+.rightResizing {
+  transition: none;
+}
+
+.leftCollapsed {
+  grid-template-columns: 0 minmax(440px, 1fr) var(--right-column-width, 440px);
 }
 
 .leftColumn,
@@ -34,7 +44,19 @@ $border: #e1e3e6;
 }
 
 .leftColumn {
+  position: relative;
   border-right: 1px solid $border;
+  overflow: hidden;
+  transition:
+    opacity 260ms ease,
+    transform 360ms ease,
+    border-color 260ms ease;
+}
+
+.leftCollapsed .leftColumn {
+  border-color: transparent;
+  opacity: 0;
+  transform: translateX(-100%);
 }
 
 .centerColumn {
@@ -42,7 +64,83 @@ $border: #e1e3e6;
 }
 
 .rightColumn {
+  position: relative;
   border-left: 1px solid $border;
+}
+
+.leftCollapseButton,
+.restoreLeftButton,
+.rightResizeHandle {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid $border;
+  background: #ffffff;
+  color: #52525b;
+  cursor: pointer;
+}
+
+.leftCollapseButton {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+.restoreLeftButton {
+  position: absolute;
+  z-index: 3;
+  top: 16px;
+  left: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-8px);
+  transition:
+    opacity 180ms ease,
+    transform 220ms ease;
+}
+
+.leftCollapsed .restoreLeftButton {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.rightResizeHandle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -7px;
+  z-index: 2;
+  width: 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #9ca3af;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.rightResizeHandle:hover,
+.rightResizeHandle:focus-visible,
+.leftCollapseButton:hover,
+.leftCollapseButton:focus-visible,
+.restoreLeftButton:hover,
+.restoreLeftButton:focus-visible {
+  border-color: #c9ccd2;
+  background: #ffffff;
+  color: #18181b;
+  outline: none;
+}
+
+.rightResizeHandle:hover,
+.rightResizeHandle:focus-visible {
+  background: rgba(255, 255, 255, 0.72);
 }
 
 @media (max-width: 1199px) {
@@ -51,6 +149,10 @@ $border: #e1e3e6;
   }
 
   .workspace {
-    grid-template-columns: 225px minmax(430px, 1fr) 225px;
+    grid-template-columns: 225px minmax(430px, 1fr) minmax(225px, var(--right-column-width, 225px));
+  }
+
+  .leftCollapsed {
+    grid-template-columns: 0 minmax(430px, 1fr) minmax(225px, var(--right-column-width, 225px));
   }
 }
