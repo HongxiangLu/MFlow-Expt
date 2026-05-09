@@ -8,6 +8,7 @@ export type {
   BookChapter,
   BookListItem,
   BookListResponse,
+  BookTextResponse,
 } from './book'
 
 export type {

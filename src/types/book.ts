@@ -10,3 +10,9 @@ export type BookListItem = {
 }
 
 export type BookListResponse = BookListItem[]
+
+export type BookTextResponse = {
+  id: string
+  title: string
+  content: string
+}

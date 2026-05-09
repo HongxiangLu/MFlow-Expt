@@ -5,12 +5,10 @@ export const bookTitleMock: BookListResponse = [
     id: 'xidaduo',
     title: '悉达多',
     chapters: [
-      { id: 'xidaduo-part-1', title: '第一部' },
       { id: 'xidaduo-brahmins-son', title: '婆罗门之子' },
       { id: 'xidaduo-samanas', title: '沙门' },
       { id: 'xidaduo-gotama', title: '乔达摩' },
       { id: 'xidaduo-awakening', title: '觉醒' },
-      { id: 'xidaduo-part-2', title: '第二部' },
       { id: 'xidaduo-kamala', title: '迦摩罗' },
       { id: 'xidaduo-among-people', title: '尘世间' },
       { id: 'xidaduo-samsara', title: '轮回' },

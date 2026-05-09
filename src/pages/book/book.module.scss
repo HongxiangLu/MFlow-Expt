@@ -20,7 +20,7 @@ $border: #e1e3e6;
   position: relative;
   height: calc(100svh - 56px);
   display: grid;
-  grid-template-columns: 240px minmax(440px, 1fr) var(--right-column-width, 440px);
+  grid-template-columns: 240px minmax(0, 1fr) var(--right-column-width, 440px);
   transition: grid-template-columns 360ms ease;
 }
 
@@ -29,7 +29,7 @@ $border: #e1e3e6;
 }
 
 .leftCollapsed {
-  grid-template-columns: 0 minmax(440px, 1fr) var(--right-column-width, 440px);
+  grid-template-columns: 0 minmax(0, 1fr) var(--right-column-width, 440px);
 }
 
 .leftColumn,
@@ -63,6 +63,8 @@ $border: #e1e3e6;
 
 .centerColumn {
   background: $center-bg;
+  overflow-y: auto;
+  scroll-behavior: smooth;
 }
 
 .rightColumn {
@@ -166,6 +168,15 @@ $border: #e1e3e6;
   outline: none;
 }
 
+.bookTitleButtonActive {
+  background: #ffffff;
+  color: #1d4ed8;
+}
+
+.bookTitleButtonActive svg {
+  color: #2563eb;
+}
+
 .chapterList {
   display: grid;
   gap: 2px;
@@ -212,6 +223,82 @@ $border: #e1e3e6;
   background: #ffffff;
   color: #111827;
   outline: none;
+}
+
+.chapterButtonActive {
+  background: #ffffff;
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+.bookTextState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  padding: 32px;
+  color: #71717a;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.markdownReader {
+  width: min(100%, 860px);
+  margin: 0 auto;
+  padding: 48px 56px 72px;
+  color: #24292f;
+  font-size: 16px;
+  line-height: 1.9;
+}
+
+.markdownReader :global(h1),
+.markdownReader :global(h2),
+.markdownReader :global(h3),
+.markdownReader :global(h4),
+.markdownReader :global(h5),
+.markdownReader :global(h6) {
+  scroll-margin-top: 28px;
+  margin: 32px 0 16px;
+  color: #111827;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.markdownReader :global(h1) {
+  margin-top: 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 30px;
+}
+
+.markdownReader :global(h2) {
+  font-size: 24px;
+}
+
+.markdownReader :global(h3) {
+  font-size: 20px;
+}
+
+.markdownReader :global(p) {
+  margin: 0 0 18px;
+}
+
+.markdownReader :global(a) {
+  color: #2563eb;
+}
+
+.markdownReader :global(blockquote) {
+  margin: 20px 0;
+  padding: 4px 0 4px 18px;
+  border-left: 3px solid #d1d5db;
+  color: #4b5563;
+}
+
+.markdownReader :global(code) {
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: #eef2f7;
+  font-size: 0.92em;
 }
 
 .leftCollapseButton,
@@ -340,10 +427,10 @@ $border: #e1e3e6;
   }
 
   .workspace {
-    grid-template-columns: 225px minmax(430px, 1fr) minmax(225px, var(--right-column-width, 225px));
+    grid-template-columns: 225px minmax(0, 1fr) minmax(225px, var(--right-column-width, 225px));
   }
 
   .leftCollapsed {
-    grid-template-columns: 0 minmax(430px, 1fr) minmax(225px, var(--right-column-width, 225px));
+    grid-template-columns: 0 minmax(0, 1fr) minmax(225px, var(--right-column-width, 225px));
   }
 }
