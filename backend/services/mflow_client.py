@@ -228,8 +228,16 @@ def _filter_graph_nodes_and_edges(
         priority = _RAW_TYPE_PRIORITY.get(raw_type, 99)
 
         if label not in label_best or priority < label_best[label]["_priority"]:
-            # 使用浅拷贝避免修改原始节点数据，同时注入 _priority 临时字段用于比较
-            label_best[label] = {**node, "_priority": priority}
+            # 若已有旧节点，且新节点类型为兜底类型而旧节点具有业务类型，则继承业务类型
+            existing_node = label_best.get(label)
+            new_node = {**node, "_priority": priority}
+            if existing_node and new_node["nodeType"] == "other" and existing_node["nodeType"] != "other":
+                new_node["nodeType"] = existing_node["nodeType"]
+            label_best[label] = new_node
+        else:
+            # 若新节点被丢弃，但新节点携带有效业务类型而当前最佳节点没有，则补充业务类型
+            if label_best[label]["nodeType"] == "other" and node["nodeType"] != "other":
+                label_best[label]["nodeType"] = node["nodeType"]
 
     # 构建最终节点列表，同时清理 _priority 和 _raw_type 两个临时字段。
     # 这两个字段仅服务于过滤层内部逻辑，不属于 GraphNode 模型的 API 契约，
