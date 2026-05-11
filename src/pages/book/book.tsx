@@ -1,8 +1,9 @@
 import { useCallback, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { BookOpen, ChevronDown, ChevronRight, MessageSquare } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import AppHeader from '../../components/app-header/app-header'
 import BookKnowledgeGraph from '../../components/book-knowledge-graph/book-knowledge-graph'
+import BookAi from './bookai'
 import { useBookStoreController } from '../../store/book'
 import { bookGraphMockMap } from '../../../mock/BOOK/book-graph'
 import type { GraphNode } from '../../types'
@@ -11,6 +12,8 @@ import styles from './book.module.scss'
 type BookWorkspaceStyle = CSSProperties & {
   '--right-column-width': string
 }
+
+type CenterTab = 'reader' | 'ai'
 
 const rightColumnMinWidth = 260
 const markdownHeadingSelector = 'h1, h2, h3, h4, h5, h6'
@@ -22,6 +25,7 @@ function clampRightColumnWidth(width: number, maxWidth: number) {
 export default function BookPage() {
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false)
   const [rightColumnWidth, setRightColumnWidth] = useState(440)
+  const [activeCenterTab, setActiveCenterTab] = useState<CenterTab>('reader')
   const workspaceRef = useRef<HTMLElement>(null)
   const {
     books,
@@ -43,19 +47,23 @@ export default function BookPage() {
 
   const handleFocusGraphNode = useCallback(
     (node: GraphNode) => {
-      const centerColumn = centerColumnRef.current
-      if (!centerColumn) return
+      setActiveCenterTab('reader')
 
-      const headings = Array.from(centerColumn.querySelectorAll(markdownHeadingSelector))
-      const nodeLabel = node.label.trim()
-      const targetHeading = headings.find((heading) => {
-        const headingText = heading.textContent?.trim()
-        if (!headingText) return false
+      window.requestAnimationFrame(() => {
+        const centerColumn = centerColumnRef.current
+        if (!centerColumn) return
 
-        return headingText === nodeLabel || headingText.includes(nodeLabel) || nodeLabel.includes(headingText)
+        const headings = Array.from(centerColumn.querySelectorAll(markdownHeadingSelector))
+        const nodeLabel = node.label.trim()
+        const targetHeading = headings.find((heading) => {
+          const headingText = heading.textContent?.trim()
+          if (!headingText) return false
+
+          return headingText === nodeLabel || headingText.includes(nodeLabel) || nodeLabel.includes(headingText)
+        })
+
+        targetHeading?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       })
-
-      targetHeading?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     },
     [centerColumnRef],
   )
@@ -170,17 +178,71 @@ export default function BookPage() {
             onClick={() => setIsLeftCollapsed(true)}
           />
         </aside>
-        <section ref={centerColumnRef} className={styles.centerColumn} aria-label="Book center column">
-          {isBookTextLoading && <div className={styles.bookTextState}>原文加载中</div>}
-          {!isBookTextLoading && bookTextError && <div className={styles.bookTextState}>{bookTextError}</div>}
-          {!isBookTextLoading && !bookTextError && !bookText?.content && (
-            <div className={styles.bookTextState}>请选择一本书</div>
-          )}
-          {!isBookTextLoading && !bookTextError && bookText?.content && (
-            <article className={styles.markdownReader}>
-              <ReactMarkdown>{bookText.content}</ReactMarkdown>
-            </article>
-          )}
+        <section className={styles.centerColumn} aria-label="Book center column">
+          <div className={styles.centerTabs} role="tablist" aria-label="中间栏视图">
+            <button
+              className={`${styles.centerTabButton} ${activeCenterTab === 'reader' ? styles.centerTabButtonActive : ''}`}
+              id="book-reader-tab"
+              type="button"
+              role="tab"
+              aria-selected={activeCenterTab === 'reader'}
+              aria-controls="book-reader-panel"
+              onClick={() => setActiveCenterTab('reader')}
+            >
+              <BookOpen size={16} />
+              原文
+            </button>
+            <button
+              className={`${styles.centerTabButton} ${activeCenterTab === 'ai' ? styles.centerTabButtonActive : ''}`}
+              id="book-ai-tab"
+              type="button"
+              role="tab"
+              aria-selected={activeCenterTab === 'ai'}
+              aria-controls="book-ai-panel"
+              onClick={() => setActiveCenterTab('ai')}
+            >
+              <MessageSquare size={16} />
+              AI 对话
+            </button>
+          </div>
+
+          <div className={styles.centerBody}>
+            <section
+              className={`${styles.readerPanel} ${activeCenterTab !== 'reader' ? styles.centerPanelHidden : ''}`}
+              id="book-reader-panel"
+              role="tabpanel"
+              aria-labelledby="book-reader-tab"
+              aria-hidden={activeCenterTab !== 'reader'}
+              ref={centerColumnRef}
+            >
+              {isBookTextLoading && <div className={styles.bookTextState}>原文加载中</div>}
+              {!isBookTextLoading && bookTextError && <div className={styles.bookTextState}>{bookTextError}</div>}
+              {!isBookTextLoading && !bookTextError && !bookText?.content && (
+                <div className={styles.bookTextState}>请选择一本书</div>
+              )}
+              {!isBookTextLoading && !bookTextError && bookText?.content && (
+                <article className={styles.markdownReader}>
+                  <ReactMarkdown>{bookText.content}</ReactMarkdown>
+                </article>
+              )}
+            </section>
+
+            <div
+              className={`${styles.aiPanelWrap} ${activeCenterTab !== 'ai' ? styles.centerPanelHidden : ''}`}
+              id="book-ai-panel"
+              role="tabpanel"
+              aria-labelledby="book-ai-tab"
+              aria-hidden={activeCenterTab !== 'ai'}
+            >
+              <BookAi
+                bookTitle={selectedBook?.title}
+                chapterTitle={selectedChapterTitle}
+                bookContent={bookText?.content}
+                isBookLoading={isBookTextLoading}
+                bookError={bookTextError}
+              />
+            </div>
+          </div>
         </section>
         <aside className={styles.rightColumn} aria-label="Book right column">
           <button

@@ -63,13 +63,86 @@ $border: #e1e3e6;
 
 .centerColumn {
   background: $center-bg;
-  overflow-y: auto;
-  scroll-behavior: smooth;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .rightColumn {
   position: relative;
   border-left: 1px solid $border;
+}
+
+.centerTabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  height: 56px;
+  padding: 0 18px;
+  border-bottom: 1px solid $border;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.centerTabButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #52525b;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.centerTabButton svg {
+  color: #71717a;
+}
+
+.centerTabButton:hover,
+.centerTabButton:focus-visible {
+  background: #f1f5f9;
+  color: #111827;
+  outline: none;
+}
+
+.centerTabButtonActive {
+  background: #e0ecff;
+  color: #1d4ed8;
+}
+
+.centerTabButtonActive svg {
+  color: #2563eb;
+}
+
+.centerBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.readerPanel,
+.aiPanelWrap {
+  height: 100%;
+  min-height: 0;
+}
+
+.readerPanel {
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+
+.aiPanelWrap {
+  overflow: hidden;
+}
+
+.centerPanelHidden {
+  display: none;
 }
 
 .bookListHeader {
@@ -299,6 +372,311 @@ $border: #e1e3e6;
   border-radius: 4px;
   background: #eef2f7;
   font-size: 0.92em;
+}
+
+.bookAiPanel {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #f8fafc;
+}
+
+.bookAiContent {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 40px 36px 118px;
+  scrollbar-color: rgba(37, 99, 235, 0.36) rgba(148, 163, 184, 0.14);
+  scrollbar-width: thin;
+}
+
+.bookAiContent::-webkit-scrollbar {
+  width: 6px;
+}
+
+.bookAiContent::-webkit-scrollbar-track {
+  background: rgba(148, 163, 184, 0.14);
+}
+
+.bookAiContent::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.34);
+}
+
+.bookAiEmpty,
+.bookAiThread {
+  width: min(760px, 100%);
+  margin: 0 auto;
+}
+
+.bookAiEmpty {
+  min-height: 100%;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.bookAiHeroIcon,
+.bookAiAvatar {
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.bookAiHeroIcon {
+  width: 44px;
+  height: 44px;
+}
+
+.bookAiEmpty h2 {
+  margin: 4px 0 0;
+  color: #111827;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.bookAiEmpty p {
+  max-width: 540px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.bookAiPromptGrid {
+  width: min(640px, 100%);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.bookAiPromptGrid button {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #475569;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: left;
+}
+
+.bookAiPromptGrid button svg {
+  flex: 0 0 auto;
+  color: #64748b;
+}
+
+.bookAiPromptGrid button:hover,
+.bookAiPromptGrid button:focus-visible,
+.bookAiPromptActive {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  outline: none;
+}
+
+.bookAiPromptGrid button:disabled {
+  opacity: 0.56;
+  cursor: not-allowed;
+}
+
+.bookAiThread {
+  display: grid;
+  gap: 18px;
+}
+
+.bookAiTurn {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.bookAiAssistantTurn {
+  justify-content: flex-start;
+}
+
+.bookAiUserTurn {
+  justify-content: flex-end;
+}
+
+.bookAiAvatar {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+}
+
+.bookAiBubble {
+  max-width: min(620px, 82%);
+  padding: 14px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #1f2937;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.bookAiUserTurn .bookAiBubble {
+  border-color: #bfdbfe;
+  background: #eaf2ff;
+  color: #1e3a8a;
+}
+
+.bookAiBubble p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.bookAiMarkdown {
+  color: #1f2937;
+  font-size: 14px;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+
+.bookAiMarkdown :global(*) {
+  max-width: 100%;
+}
+
+.bookAiMarkdown :global(p),
+.bookAiMarkdown :global(ul),
+.bookAiMarkdown :global(ol) {
+  margin: 0 0 12px;
+}
+
+.bookAiMarkdown :global(p:last-child),
+.bookAiMarkdown :global(ul:last-child),
+.bookAiMarkdown :global(ol:last-child) {
+  margin-bottom: 0;
+}
+
+.bookAiMarkdown :global(ul),
+.bookAiMarkdown :global(ol) {
+  padding-left: 20px;
+}
+
+.bookAiMarkdown :global(li) {
+  margin: 4px 0;
+}
+
+.bookAiMarkdown :global(h1),
+.bookAiMarkdown :global(h2),
+.bookAiMarkdown :global(h3) {
+  margin: 0 0 10px;
+  color: #111827;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.bookAiMarkdown :global(code) {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: #eef2f7;
+  color: #1d4ed8;
+  font-size: 0.92em;
+}
+
+.bookAiStreamCursor {
+  width: 1px;
+  height: 16px;
+  display: inline-block;
+  margin-left: 2px;
+  vertical-align: -2px;
+  background: #2563eb;
+  animation: bookAiCursorPulse 0.9s ease-in-out infinite;
+}
+
+@keyframes bookAiCursorPulse {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+.bookAiComposer {
+  position: absolute;
+  right: 28px;
+  bottom: 24px;
+  left: 28px;
+  z-index: 2;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  width: min(760px, calc(100% - 56px));
+  margin: 0 auto;
+  padding: 10px;
+  border: 1px solid #dbe3ee;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 12px 34px rgba(15, 23, 42, 0.12);
+}
+
+.bookAiComposer textarea {
+  width: 100%;
+  max-height: 128px;
+  min-height: 38px;
+  resize: none;
+  padding: 9px 4px 8px 8px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #111827;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.bookAiComposer textarea::placeholder {
+  color: #94a3b8;
+  opacity: 1;
+}
+
+.bookAiComposer textarea:disabled {
+  cursor: not-allowed;
+}
+
+.bookAiComposer button {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 50%;
+  background: #2563eb;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.bookAiComposer button:hover,
+.bookAiComposer button:focus-visible {
+  background: #1d4ed8;
+  outline: none;
+}
+
+.bookAiComposer button:disabled {
+  opacity: 0.44;
+  cursor: not-allowed;
 }
 
 .leftCollapseButton,
