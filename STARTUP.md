@@ -1,3 +1,15 @@
+.\.venv\Scripts\Activate.ps1
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+
+
+
+
+
+
+
+
+
+
 # 后端项目启动步骤
 
 本文档用于启动当前后端项目：
@@ -274,17 +286,3 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ```
 
 这个设置只对当前 PowerShell 窗口生效。
-
-### 10.4 端口 8000 被占用
-
-可以换一个端口启动：
-
-```powershell
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8001
-```
-
-然后访问：
-
-```txt
-http://127.0.0.1:8001/docs
-```
