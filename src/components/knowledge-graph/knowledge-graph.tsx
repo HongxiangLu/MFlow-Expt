@@ -1,23 +1,19 @@
-import { Maximize2 } from 'lucide-react'
-
+import GraphFullscreenButton from '../graph-fullscreen-button/graph-fullscreen-button'
 import { useKnowledgeGraphStoreController } from '../../store/graph-store'
 import styles from './knowledge-graph.module.scss'
 
 export default function KnowledgeGraph() {
-  const { graphRef, containerRef, minimapContainerRef, minimapRef, minimapViewportRef, toggleFullscreen } =
+  const { graphRef, containerRef, minimapContainerRef, minimapRef, minimapViewportRef } =
     useKnowledgeGraphStoreController()
 
   return (
     <div className={styles.graph} ref={graphRef}>
       <div className={styles.graphStage} ref={containerRef} aria-label="杜工部草堂诗笺知识图谱 Sigma 画布" />
-      <button
+      <GraphFullscreenButton
         className={styles.fullscreenButton}
-        type="button"
+        targetRef={graphRef}
         aria-label="切换关系图谱全屏"
-        onClick={toggleFullscreen}
-      >
-        <Maximize2 size={16} />
-      </button>
+      />
       <div className={styles.minimap} ref={minimapContainerRef} aria-label="拖拽移动小地图位置">
         <div className={styles.minimapStage} ref={minimapRef} />
         <div className={styles.minimapViewport} ref={minimapViewportRef} />

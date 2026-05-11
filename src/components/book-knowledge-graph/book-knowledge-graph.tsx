@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Maximize2, RotateCcw } from 'lucide-react'
+import { RotateCcw } from 'lucide-react'
 import { UndirectedGraph } from 'graphology'
 import forceAtlas2 from 'graphology-layout-forceatlas2'
 import Sigma from 'sigma'
 
+import GraphFullscreenButton from '../graph-fullscreen-button/graph-fullscreen-button'
 import type { GraphNode, GraphNodeType, GraphResponse } from '../../types'
 import styles from './book-knowledge-graph.module.scss'
 
@@ -463,15 +464,6 @@ export default function BookKnowledgeGraph({
     onFocusNode?.(node)
   }
 
-  async function toggleFullscreen() {
-    if (document.fullscreenElement) {
-      await document.exitFullscreen()
-      return
-    }
-
-    await panelRef.current?.requestFullscreen()
-  }
-
   if (!graphResponse) {
     return (
       <div className={styles.graphPanel}>
@@ -502,9 +494,7 @@ export default function BookKnowledgeGraph({
           <button className={styles.iconButton} type="button" aria-label="重置图谱视图" onClick={resetView}>
             <RotateCcw size={16} />
           </button>
-          <button className={styles.iconButton} type="button" aria-label="切换图谱全屏" onClick={toggleFullscreen}>
-            <Maximize2 size={16} />
-          </button>
+          <GraphFullscreenButton className={styles.iconButton} targetRef={panelRef} aria-label="切换图谱全屏" />
         </div>
 
         <div className={styles.typeFilters} aria-label="节点类型过滤">

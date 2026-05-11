@@ -405,15 +405,6 @@ export function useKnowledgeGraphStoreController() {
     }
   }, [graphResponse])
 
-  async function toggleFullscreen() {
-    if (document.fullscreenElement) {
-      await document.exitFullscreen()
-      return
-    }
-
-    await graphRef.current?.requestFullscreen()
-  }
-
   return {
     graphRef,
     containerRef,
@@ -422,6 +413,5 @@ export function useKnowledgeGraphStoreController() {
     minimapViewportRef,
     status,
     errorMessage,
-    toggleFullscreen,
   }
 }
