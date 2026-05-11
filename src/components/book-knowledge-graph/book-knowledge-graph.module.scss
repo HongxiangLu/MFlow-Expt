@@ -6,6 +6,12 @@
   background: #f2f3f5;
 }
 
+.graphPanel:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  background: #f2f3f5;
+}
+
 .header {
   flex: 0 0 auto;
   padding: 14px 16px 12px;

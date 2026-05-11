@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { RotateCcw } from 'lucide-react'
+import { Maximize2, RotateCcw } from 'lucide-react'
 import { UndirectedGraph } from 'graphology'
 import forceAtlas2 from 'graphology-layout-forceatlas2'
 import Sigma from 'sigma'
@@ -186,6 +186,7 @@ export default function BookKnowledgeGraph({
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [activeNodeType, setActiveNodeType] = useState<string | null>(null)
   const [searchValue, setSearchValue] = useState('')
+  const panelRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const rendererRef = useRef<Sigma<NodeAttributes, EdgeAttributes> | null>(null)
   const graphRef = useRef<UndirectedGraph<NodeAttributes, EdgeAttributes> | null>(null)
@@ -249,6 +250,7 @@ export default function BookKnowledgeGraph({
 
     const graph = buildGraph(graphResponse)
     graphRef.current = graph
+    let fullscreenResizeTimeout: number | undefined
 
     const renderer = new Sigma<NodeAttributes, EdgeAttributes>(graph, stage, {
       allowInvalidContainer: true,
@@ -393,11 +395,23 @@ export default function BookKnowledgeGraph({
     })
     renderer.on('clickStage', () => setSelectedNodeId(null))
 
+    function handleFullscreenChange() {
+      window.clearTimeout(fullscreenResizeTimeout)
+      fullscreenResizeTimeout = window.setTimeout(() => {
+        renderer.resize()
+        renderer.refresh()
+      }, 80)
+    }
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+
     requestAnimationFrame(() => {
       focusNode(chapterFocusNodeId ?? graphResponse.centerNodeId, false)
     })
 
     return () => {
+      window.clearTimeout(fullscreenResizeTimeout)
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
       renderer.kill()
       rendererRef.current = null
       graphRef.current = null
@@ -449,6 +463,15 @@ export default function BookKnowledgeGraph({
     onFocusNode?.(node)
   }
 
+  async function toggleFullscreen() {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen()
+      return
+    }
+
+    await panelRef.current?.requestFullscreen()
+  }
+
   if (!graphResponse) {
     return (
       <div className={styles.graphPanel}>
@@ -458,7 +481,7 @@ export default function BookKnowledgeGraph({
   }
 
   return (
-    <div className={styles.graphPanel}>
+    <div className={styles.graphPanel} ref={panelRef}>
       <div className={styles.header}>
         <div className={styles.titleRow}>
           <h2>{graphResponse.nodes.find((node) => node.id === graphResponse.centerNodeId)?.label ?? '知识图谱'}</h2>
@@ -478,6 +501,9 @@ export default function BookKnowledgeGraph({
           />
           <button className={styles.iconButton} type="button" aria-label="重置图谱视图" onClick={resetView}>
             <RotateCcw size={16} />
+          </button>
+          <button className={styles.iconButton} type="button" aria-label="切换图谱全屏" onClick={toggleFullscreen}>
+            <Maximize2 size={16} />
           </button>
         </div>
 
