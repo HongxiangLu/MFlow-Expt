@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sqlite3 museum.db \"SELECT id, label, node_type FROM graph_nodes WHERE id LIKE 'xiaowangzi%' OR id LIKE 'chapter-xiaowangzi%' ORDER BY id;\")"
+    ]
+  }
+}

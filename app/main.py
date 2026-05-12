@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api import book, dialogue
+
 app = FastAPI(title="cultural-relics-museum-backend")
 
 app.add_middleware(
@@ -11,6 +13,5 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/api/health")
-def health():
-    return {"data": {"status": "ok"}}
+app.include_router(book.router)
+app.include_router(dialogue.router)
