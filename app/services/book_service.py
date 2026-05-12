@@ -64,14 +64,32 @@ class BookService:
         }
 
     async def get_chat_context(self, request: ChatRequest) -> tuple[str, list[dict]]:
+        context_markdown = ""
+        if request.selectedText:
+            source_refs = await self.repository.get_source_refs(
+                book_id=request.bookId,
+                chapter_id=request.selectedText.chapterId,
+            )
+            context_markdown = request.selectedText.text
+            return context_markdown, source_refs
+
+        if request.scope == "book":
+            book_id = await self.get_request_book_id(request)
+            source_refs = await self.repository.get_source_refs(
+                book_id=book_id,
+                limit=8,
+            )
+            if book_id:
+                book = await self.repository.get_book_content(book_id)
+                if book:
+                    context_markdown = book["markdown"]
+            return context_markdown, source_refs
+
         source_refs = await self.repository.get_source_refs(
             book_id=request.bookId,
             chapter_id=request.chapterId,
         )
-        context_markdown = ""
-        if request.selectedText:
-            context_markdown = request.selectedText.text
-        elif request.chapterId:
+        if request.chapterId:
             chapter = await self.repository.get_raw_chapter_content(request.chapterId)
             if chapter:
                 context_markdown = chapter["markdown"]
@@ -82,10 +100,28 @@ class BookService:
 
         return context_markdown, source_refs
 
+    async def get_request_book_id(self, request: ChatRequest) -> str | None:
+        if request.bookId:
+            return request.bookId
+
+        if request.chapterId:
+            chapter = await self.repository.get_raw_chapter_content(request.chapterId)
+            if chapter:
+                return chapter["bookId"]
+
+        if request.selectedText:
+            chapter = await self.repository.get_raw_chapter_content(
+                request.selectedText.chapterId
+            )
+            if chapter:
+                return chapter["bookId"]
+
+        return None
+
     def get_related_node_ids(self, request: ChatRequest) -> list[str]:
         related_node_ids = []
         if request.bookId:
             related_node_ids.append(request.bookId)
-        if request.chapterId:
+        if request.scope == "chapter" and request.chapterId:
             related_node_ids.append(request.chapterId)
         return related_node_ids

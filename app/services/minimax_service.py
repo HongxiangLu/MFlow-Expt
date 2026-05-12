@@ -6,7 +6,8 @@ from openai import AsyncOpenAI
 from app.core.config import get_settings
 from app.schemas.chat import ChatRequest
 
-MAX_CONTEXT_CHARS = 12000
+MAX_CHAPTER_CONTEXT_CHARS = 12000
+MAX_BOOK_CONTEXT_CHARS = 60000
 THINK_START = "<think>"
 THINK_END = "</think>"
 
@@ -39,7 +40,19 @@ class MiniMaxService:
         source_refs: list[dict],
     ) -> list[dict[str, str]]:
         selected_text = request.selectedText.text if request.selectedText else ""
-        context = context_markdown[:MAX_CONTEXT_CHARS]
+        scope_label = "用户选中的原文片段" if request.selectedText else (
+            "整本书" if request.scope == "book" else "当前章节"
+        )
+        context_limit = (
+            MAX_BOOK_CONTEXT_CHARS if request.scope == "book" and not request.selectedText
+            else MAX_CHAPTER_CONTEXT_CHARS
+        )
+        context = context_markdown[:context_limit]
+        truncated_note = (
+            f"\n注意：原文上下文超过 {context_limit} 字，已截取前 {context_limit} 字。"
+            if len(context_markdown) > context_limit
+            else ""
+        )
 
         return [
             {
@@ -52,10 +65,11 @@ class MiniMaxService:
             {
                 "role": "user",
                 "content": (
+                    f"对话范围：{scope_label}\n"
                     f"书籍ID：{request.bookId or ''}\n"
                     f"章节ID：{request.chapterId or ''}\n"
                     f"用户选中文本：{selected_text}\n\n"
-                    f"原文上下文：\n{context}\n\n"
+                    f"原文上下文：\n{context}{truncated_note}\n\n"
                     f"可用引用：{source_refs}\n\n"
                     f"问题：{request.question}"
                 ),
