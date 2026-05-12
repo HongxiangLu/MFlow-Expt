@@ -36,8 +36,11 @@ type BookKnowledgeGraphProps = {
 }
 
 const focusedCameraRatio = 0.64
+const minCameraRatio = 0.05
+const maxCameraRatio = 8
 
 const nodeTypeColorMap: Record<string, string> = {
+  knowledge_base: '#b45309',
   book: '#1d4ed8',
   chapter: '#0891b2',
   section: '#0f766e',
@@ -57,6 +60,7 @@ const nodeTypeColorMap: Record<string, string> = {
 }
 
 const nodeTypeLabelMap: Record<string, string> = {
+  knowledge_base: '知识库',
   book: '书籍',
   chapter: '章节',
   section: '部分',
@@ -76,11 +80,11 @@ function getNodeTypeLabel(nodeType: GraphNodeType) {
 }
 
 function getNodeSize(nodeType: GraphNodeType, isCenterNode: boolean, degree: number) {
-  if (isCenterNode || nodeType === 'book') return 20
-  if (nodeType === 'section') return 15
-  if (nodeType === 'chapter') return 13
+  if (isCenterNode || nodeType === 'book') return 15
+  if (nodeType === 'section') return 10
+  if (nodeType === 'chapter') return 9
 
-  return Math.min(14, 8 + degree * 0.9)
+  return Math.min(9, 5 + degree * 0.45)
 }
 
 function normalizeSearchValue(value: string) {
@@ -99,7 +103,7 @@ function buildGraph(graphResponse: GraphResponse) {
   graphResponse.nodes.forEach((node, index) => {
     const isCenterNode = node.id === graphResponse.centerNodeId
     const baseColor = getNodeColor(node.nodeType)
-    const radius = 5.2 + index * 0.18
+    const radius = 8 + index * 0.28
 
     graph.addNode(node.id, {
       label: node.label,
@@ -132,9 +136,9 @@ function buildGraph(graphResponse: GraphResponse) {
     forceAtlas2.assign(graph, {
       iterations: 180,
       settings: {
-        gravity: 1.7,
-        scalingRatio: 2.8,
-        slowDown: 7,
+        gravity: 1.15,
+        scalingRatio: 5.2,
+        slowDown: 9,
         edgeWeightInfluence: 0.8,
       },
     })
@@ -270,8 +274,8 @@ export default function BookKnowledgeGraph({
       labelRenderedSizeThreshold: 7,
       labelSize: 12,
       labelWeight: '700',
-      maxCameraRatio: 3.2,
-      minCameraRatio: 0.22,
+      maxCameraRatio,
+      minCameraRatio,
       renderEdgeLabels: true,
       renderLabels: true,
       stagePadding: 32,

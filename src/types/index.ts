@@ -5,9 +5,15 @@ export type {
 } from './api'
 
 export type {
+  BookAnchor,
+  BookChatRequest,
+  BookChatResponse,
   BookChapter,
+  BookEntityMention,
   BookListItem,
   BookListResponse,
+  BookSelectedText,
+  BookSourceRef,
   BookTextResponse,
 } from './book'
 

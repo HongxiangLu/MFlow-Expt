@@ -2,7 +2,7 @@
 import { useEffect, useRef } from 'react'
 import { create } from 'zustand'
 
-import { getBookList, getBookText } from '../services'
+import { getBookContent, getBookList } from '../services'
 import type { BookChapter, BookListItem, BookTextResponse } from '../types'
 
 const markdownHeadingSelector = 'h1, h2, h3, h4, h5, h6'
@@ -52,6 +52,14 @@ function getChapterHeadingCandidates(chapter: BookChapter) {
   return candidates
 }
 
+function getFirstChapter(chapters: BookChapter[]): BookChapter | null {
+  return chapters[0] ?? null
+}
+
+function getBookFirstChapter(book: BookListItem | undefined) {
+  return book ? getFirstChapter(book.chapters) : null
+}
+
 function isAbortError(error: unknown) {
   if (error instanceof DOMException && error.name === 'AbortError') {
     return true
@@ -70,12 +78,20 @@ const useBookStore = create<BookStore>((set) => ({
   ...initialBookState,
   setBookListLoading: () => set({ isBookListLoading: true, bookListError: null }),
   setBookList: (books) =>
-    set((state) => ({
-      books,
-      selectedBookId: state.selectedBookId ?? books[0]?.id ?? null,
-      isBookListLoading: false,
-      bookListError: null,
-    })),
+    set((state) => {
+      const selectedBook = books.find((book) => book.id === state.selectedBookId) ?? books[0]
+      const selectedChapter = getBookFirstChapter(selectedBook)
+
+      return {
+        books,
+        expandedBookIds: selectedBook ? new Set([selectedBook.id]) : new Set<string>(),
+        selectedBookId: selectedBook?.id ?? null,
+        selectedChapterId: selectedChapter?.id ?? null,
+        pendingHeadingCandidates: selectedChapter ? getChapterHeadingCandidates(selectedChapter) : [],
+        isBookListLoading: false,
+        bookListError: null,
+      }
+    }),
   setBookListError: (message) => set({ isBookListLoading: false, bookListError: message }),
   setBookTextLoading: () => set({ isBookTextLoading: true, bookTextError: null }),
   setBookText: (bookText) => set({ bookText, isBookTextLoading: false, bookTextError: null }),
@@ -83,6 +99,8 @@ const useBookStore = create<BookStore>((set) => ({
   selectBook: (bookId) =>
     set((state) => {
       const expandedBookIds = new Set(state.expandedBookIds)
+      const book = state.books.find((item) => item.id === bookId)
+      const firstChapter = getBookFirstChapter(book)
 
       if (expandedBookIds.has(bookId)) {
         expandedBookIds.delete(bookId)
@@ -93,8 +111,8 @@ const useBookStore = create<BookStore>((set) => ({
       return {
         expandedBookIds,
         selectedBookId: bookId,
-        selectedChapterId: null,
-        pendingHeadingCandidates: [],
+        selectedChapterId: firstChapter?.id ?? null,
+        pendingHeadingCandidates: firstChapter ? getChapterHeadingCandidates(firstChapter) : [],
       }
     }),
   selectChapter: (bookId, chapter) =>
@@ -128,7 +146,7 @@ async function requestBookText(bookId: string, signal?: AbortSignal) {
   setBookTextLoading()
 
   try {
-    const bookText = await getBookText(bookId, { signal })
+    const bookText = await getBookContent(bookId, { signal })
     setBookText(bookText)
   } catch (error) {
     if (isAbortError(error)) {
@@ -185,11 +203,21 @@ export function useBookStoreController() {
 
     const centerColumn = centerColumnRef.current
     const headings = Array.from(centerColumn?.querySelectorAll(markdownHeadingSelector) ?? [])
-    const targetHeading = headings.find((heading) =>
+    const exactTargetHeading = headings.find((heading) =>
       pendingHeadingCandidates.some((candidate) => heading.textContent?.trim() === candidate),
     )
+    const fuzzyTargetHeading =
+      exactTargetHeading ??
+      headings.find((heading) => {
+        const headingText = heading.textContent?.trim()
+        if (!headingText) return false
 
-    targetHeading?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        return pendingHeadingCandidates.some(
+          (candidate) => headingText.includes(candidate) || candidate.includes(headingText),
+        )
+      })
+
+    fuzzyTargetHeading?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [bookText?.content, pendingHeadingCandidates])
 
   function handleSelectBook(bookId: string) {

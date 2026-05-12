@@ -25,7 +25,7 @@ export const xiaowangziGraph: GraphResponse = {
     { id: 'chapter-xiaowangzi-childhood', label: '画蟒蛇的童年', nodeType: 'chapter' },
     { id: 'chapter-xiaowangzi-meeting', label: '沙漠相遇', nodeType: 'chapter' },
     { id: 'chapter-xiaowangzi-b612', label: 'B612 与猴面包树', nodeType: 'chapter' },
-    { id: 'chapter-xiaowangzi-rose', label: '玫瑰与离开', nodeType: 'chapter' },
+    { id: 'chapter-xiaowangzi-rose', label: '玫瑰与星落', nodeType: 'chapter' },
     { id: 'chapter-xiaowangzi-planets', label: '星球旅行', nodeType: 'chapter' },
     { id: 'chapter-xiaowangzi-earth', label: '来到地球', nodeType: 'chapter' },
     { id: 'chapter-xiaowangzi-fox', label: '狐狸与驯养', nodeType: 'chapter' },

@@ -1,4 +1,5 @@
 import type { SessionId } from './api'
+import type { BookSourceRef } from './book'
 
 export type GraphQueryRequest = {
   query: string
@@ -25,6 +26,8 @@ export type GraphNode = {
   id: string
   label: string
   nodeType: GraphNodeType
+  description?: string | null
+  sourceRefs?: BookSourceRef[]
 }
 
 export type GraphEdge = {

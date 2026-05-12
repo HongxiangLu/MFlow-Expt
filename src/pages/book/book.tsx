@@ -1,12 +1,12 @@
-import { useCallback, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { BookOpen, ChevronDown, ChevronRight, MessageSquare } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import AppHeader from '../../components/app-header/app-header'
 import BookKnowledgeGraph from '../../components/book-knowledge-graph/book-knowledge-graph'
 import BookAi from './bookai'
+import { getBookGraph, getBookGraphNodeSources } from '../../services'
 import { useBookStoreController } from '../../store/book'
-import { bookGraphMockMap } from '../../../mock/BOOK/book-graph'
-import type { GraphNode } from '../../types'
+import type { BookChapter, BookSourceRef, GraphNode, GraphResponse } from '../../types'
 import styles from './book.module.scss'
 
 type BookWorkspaceStyle = CSSProperties & {
@@ -17,16 +17,142 @@ type CenterTab = 'reader' | 'ai'
 
 const rightColumnMinWidth = 260
 const markdownHeadingSelector = 'h1, h2, h3, h4, h5, h6'
+const sourceHighlightAttribute = 'data-book-source-highlight'
 
 function clampRightColumnWidth(width: number, maxWidth: number) {
   return Math.min(maxWidth, Math.max(rightColumnMinWidth, width))
+}
+
+function flattenChapters(chapters: BookChapter[], level = 0): Array<BookChapter & { depth: number }> {
+  return chapters.flatMap((chapter) => [
+    { ...chapter, depth: level },
+    ...flattenChapters(chapter.children ?? [], level + 1),
+  ])
+}
+
+function isCanceledError(error: unknown) {
+  if (error instanceof DOMException && error.name === 'AbortError') {
+    return true
+  }
+
+  if (typeof error === 'object' && error) {
+    const maybeCanceledError = error as { code?: unknown; name?: unknown }
+
+    return maybeCanceledError.code === 'ERR_CANCELED' || maybeCanceledError.name === 'CanceledError'
+  }
+
+  return false
+}
+
+function removeSourceHighlights(container: HTMLElement) {
+  container.querySelectorAll(`mark[${sourceHighlightAttribute}]`).forEach((mark) => {
+    const parent = mark.parentNode
+    if (!parent) return
+
+    mark.replaceWith(...Array.from(mark.childNodes))
+    parent.normalize()
+  })
+}
+
+function getTextNodes(container: HTMLElement) {
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT)
+  const textNodes: Text[] = []
+  let currentNode = walker.nextNode()
+
+  while (currentNode) {
+    textNodes.push(currentNode as Text)
+    currentNode = walker.nextNode()
+  }
+
+  return textNodes
+}
+
+function getRangeFromTextOffsets(textNodes: Text[], startOffset: number, endOffset: number) {
+  const range = document.createRange()
+  let currentOffset = 0
+  let didSetStart = false
+
+  for (const textNode of textNodes) {
+    const nextOffset = currentOffset + textNode.data.length
+
+    if (!didSetStart && startOffset >= currentOffset && startOffset <= nextOffset) {
+      range.setStart(textNode, startOffset - currentOffset)
+      didSetStart = true
+    }
+
+    if (didSetStart && endOffset >= currentOffset && endOffset <= nextOffset) {
+      range.setEnd(textNode, endOffset - currentOffset)
+      return range
+    }
+
+    currentOffset = nextOffset
+  }
+
+  return null
+}
+
+function findQuoteRange(container: HTMLElement, quote: string) {
+  const normalizedQuote = quote.replace(/\s+/g, ' ').trim()
+  if (!normalizedQuote) return null
+
+  const textNodes = getTextNodes(container)
+  const fullText = textNodes.map((textNode) => textNode.data).join('')
+  const directIndex = fullText.indexOf(quote.trim())
+
+  if (directIndex >= 0) {
+    return getRangeFromTextOffsets(textNodes, directIndex, directIndex + quote.trim().length)
+  }
+
+  const shortQuote = normalizedQuote.slice(0, 80)
+  const normalizedFullText = fullText.replace(/\s+/g, ' ')
+  const normalizedIndex = normalizedFullText.indexOf(shortQuote)
+
+  if (normalizedIndex < 0) return null
+
+  const originalPrefix = normalizedFullText.slice(0, normalizedIndex)
+  let originalStart = 0
+  let normalizedCursor = 0
+
+  while (originalStart < fullText.length && normalizedCursor < originalPrefix.length) {
+    const currentChar = fullText[originalStart]
+    const normalizedChar = /\s/.test(currentChar) ? ' ' : currentChar
+    const previousNormalizedChar = normalizedCursor > 0 ? originalPrefix[normalizedCursor - 1] : ''
+
+    if (normalizedChar !== ' ' || previousNormalizedChar !== ' ') {
+      normalizedCursor += 1
+    }
+
+    originalStart += 1
+  }
+
+  return getRangeFromTextOffsets(textNodes, originalStart, Math.min(fullText.length, originalStart + shortQuote.length))
+}
+
+function highlightSourceRef(container: HTMLElement, ref: BookSourceRef, markdown?: string) {
+  removeSourceHighlights(container)
+
+  const quote = ref.quote || markdown?.slice(ref.startOffset, ref.endOffset) || ''
+  const range = findQuoteRange(container, quote)
+
+  if (!range) return false
+
+  const mark = document.createElement('mark')
+  mark.setAttribute(sourceHighlightAttribute, 'true')
+  mark.append(range.extractContents())
+  range.insertNode(mark)
+  mark.scrollIntoView({ behavior: 'smooth', block: 'center' })
+
+  return true
 }
 
 export default function BookPage() {
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false)
   const [rightColumnWidth, setRightColumnWidth] = useState(440)
   const [activeCenterTab, setActiveCenterTab] = useState<CenterTab>('reader')
+  const [bookGraph, setBookGraph] = useState<GraphResponse | null>(null)
+  const [sourceHighlightRef, setSourceHighlightRef] = useState<BookSourceRef | null>(null)
   const workspaceRef = useRef<HTMLElement>(null)
+  const nodeSourcesAbortControllerRef = useRef<AbortController | undefined>(undefined)
   const {
     books,
     expandedBookIds,
@@ -41,13 +167,104 @@ export default function BookPage() {
     handleSelectBook,
     handleSelectChapter,
   } = useBookStoreController()
+  const handleSelectChapterRef = useRef(handleSelectChapter)
   const selectedBook = books.find((book) => book.id === selectedBookId)
-  const selectedChapterTitle = selectedBook?.chapters.find((chapter) => chapter.id === selectedChapterId)?.title
-  const selectedGraph = selectedBookId ? (bookGraphMockMap[selectedBookId] ?? null) : null
+  const selectedBookChapters = useMemo(() => flattenChapters(selectedBook?.chapters ?? []), [selectedBook])
+  const selectedChapterTitle = selectedBookChapters.find((chapter) => chapter.id === selectedChapterId)?.title
+
+  useEffect(() => {
+    handleSelectChapterRef.current = handleSelectChapter
+  }, [handleSelectChapter])
+
+  useEffect(() => {
+    return () => {
+      nodeSourcesAbortControllerRef.current?.abort()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!selectedBookId) {
+      setBookGraph(null)
+      return
+    }
+
+    const controller = new AbortController()
+
+    setBookGraph(null)
+    setSourceHighlightRef(null)
+
+    void getBookGraph(selectedBookId, { signal: controller.signal })
+      .then(setBookGraph)
+      .catch((error: unknown) => {
+        const maybeCanceledError = error as { code?: unknown; name?: unknown }
+        const isCanceled = maybeCanceledError.code === 'ERR_CANCELED' || maybeCanceledError.name === 'CanceledError'
+
+        if (!isCanceled) {
+          setBookGraph(null)
+        }
+      })
+
+    return () => {
+      controller.abort()
+    }
+  }, [selectedBookId])
+
+  useEffect(() => {
+    if (!sourceHighlightRef || !bookText?.content || activeCenterTab !== 'reader') return
+
+    const frameId = window.requestAnimationFrame(() => {
+      const centerColumn = centerColumnRef.current
+      if (!centerColumn) return
+
+      const didHighlight = highlightSourceRef(centerColumn, sourceHighlightRef, bookText.content)
+
+      if (didHighlight || !sourceHighlightRef.chapterTitle) return
+
+      const headings = Array.from(centerColumn.querySelectorAll(markdownHeadingSelector))
+      const fallbackHeading = headings.find((heading) => heading.textContent?.trim() === sourceHighlightRef.chapterTitle)
+      fallbackHeading?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+
+    return () => {
+      window.cancelAnimationFrame(frameId)
+    }
+  }, [activeCenterTab, bookText?.content, centerColumnRef, sourceHighlightRef])
 
   const handleFocusGraphNode = useCallback(
-    (node: GraphNode) => {
+    async (node: GraphNode) => {
       setActiveCenterTab('reader')
+      nodeSourcesAbortControllerRef.current?.abort()
+
+      if (!selectedBookId) {
+        return
+      }
+
+      nodeSourcesAbortControllerRef.current = new AbortController()
+
+      try {
+        const refs =
+          node.sourceRefs && node.sourceRefs.length > 0
+            ? node.sourceRefs
+            : await getBookGraphNodeSources(node.id, selectedBookId, {
+                signal: nodeSourcesAbortControllerRef.current.signal,
+              })
+        const sourceRef = refs[0]
+
+        if (sourceRef) {
+          const targetChapter = selectedBookChapters.find((chapter) => chapter.id === sourceRef.chapterId)
+
+          if (selectedBook && targetChapter) {
+            handleSelectChapterRef.current(selectedBook, targetChapter)
+          }
+
+          setSourceHighlightRef(sourceRef)
+          return
+        }
+      } catch (error) {
+        if (isCanceledError(error)) {
+          return
+        }
+      }
 
       window.requestAnimationFrame(() => {
         const centerColumn = centerColumnRef.current
@@ -65,7 +282,7 @@ export default function BookPage() {
         targetHeading?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       })
     },
-    [centerColumnRef],
+    [centerColumnRef, selectedBook, selectedBookChapters, selectedBookId],
   )
 
   function handleRightResizePointerDown(event: ReactPointerEvent<HTMLButtonElement>) {
@@ -101,6 +318,20 @@ export default function BookPage() {
     window.addEventListener('pointermove', handlePointerMove)
     window.addEventListener('pointerup', handlePointerUp, { once: true })
     window.addEventListener('pointercancel', handlePointerUp, { once: true })
+  }
+
+  function clearSourceHighlight() {
+    setSourceHighlightRef(null)
+
+    const centerColumn = centerColumnRef.current
+    if (centerColumn) {
+      removeSourceHighlights(centerColumn)
+    }
+  }
+
+  function handleBookClick(bookId: string) {
+    clearSourceHighlight()
+    handleSelectBook(bookId)
   }
 
   return (
@@ -144,7 +375,7 @@ export default function BookPage() {
                     type="button"
                     aria-expanded={expandedBookIds.has(book.id)}
                     aria-controls={`book-chapters-${book.id}`}
-                    onClick={() => handleSelectBook(book.id)}
+                    onClick={() => handleBookClick(book.id)}
                   >
                     <span>{book.title}</span>
                     {expandedBookIds.has(book.id) ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
@@ -154,13 +385,17 @@ export default function BookPage() {
                     className={`${styles.chapterList} ${expandedBookIds.has(book.id) ? styles.chapterListOpen : ''}`}
                     id={`book-chapters-${book.id}`}
                   >
-                    {book.chapters.map((chapter) => (
+                    {flattenChapters(book.chapters).map((chapter) => (
                       <button
                         className={`${styles.chapterButton} ${selectedChapterId === chapter.id ? styles.chapterButtonActive : ''}`}
                         type="button"
                         key={chapter.id}
+                        style={{ paddingLeft: `${12 + chapter.depth * 14}px` }}
                         tabIndex={expandedBookIds.has(book.id) ? 0 : -1}
-                        onClick={() => handleSelectChapter(book, chapter)}
+                        onClick={() => {
+                          clearSourceHighlight()
+                          handleSelectChapter(book, chapter)
+                        }}
                       >
                         {chapter.title}
                       </button>
@@ -235,9 +470,11 @@ export default function BookPage() {
               aria-hidden={activeCenterTab !== 'ai'}
             >
               <BookAi
+                knowledgeBaseId={selectedBook?.knowledgeBaseId}
+                bookId={selectedBook?.id}
+                chapterId={selectedChapterId ?? undefined}
                 bookTitle={selectedBook?.title}
                 chapterTitle={selectedChapterTitle}
-                bookContent={bookText?.content}
                 isBookLoading={isBookTextLoading}
                 bookError={bookTextError}
               />
@@ -252,7 +489,7 @@ export default function BookPage() {
             onPointerDown={handleRightResizePointerDown}
           />
           <BookKnowledgeGraph
-            graphResponse={selectedGraph}
+            graphResponse={bookGraph}
             selectedChapterId={selectedChapterId}
             selectedChapterTitle={selectedChapterTitle}
             onFocusNode={handleFocusGraphNode}

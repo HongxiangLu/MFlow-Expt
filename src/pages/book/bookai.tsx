@@ -1,8 +1,24 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type UIEvent, type WheelEvent } from 'react'
+import {
+  Children,
+  cloneElement,
+  isValidElement,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+  type ReactElement,
+  type ReactNode,
+  type UIEvent,
+  type WheelEvent,
+} from 'react'
 import { MessageSquare, Send, Sparkles } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 
-import { createSessionId, streamChat } from '../../services'
+import { createSessionId, streamBookQuestion } from '../../services'
+import type { BookChatRequest } from '../../types'
 import styles from './book.module.scss'
 
 type BookAiRole = 'user' | 'assistant'
@@ -15,23 +31,22 @@ type BookAiMessage = {
 }
 
 type BookAiProps = {
+  knowledgeBaseId?: string
+  bookId?: string
+  chapterId?: string
   bookTitle?: string
   chapterTitle?: string
-  bookContent?: string
   isBookLoading?: boolean
   bookError?: string | null
-}
-
-type BookAiChatRequest = {
-  query: string
-  session_id: string
 }
 
 const autoScrollThreshold = 48
 const resumeAutoScrollThreshold = 4
 const programmaticScrollResetDelay = 120
+const typewriterInterval = 60
+const typewriterCharsPerTick = 1
 const fallbackErrorMessage = '当前 AI 服务暂时不可用，请稍后重试。'
-const excerptLength = 3600
+const markdownCursorMarker = '[[STREAM_CURSOR]]'
 
 const defaultPrompts = [
   '总结当前章节的关键内容',
@@ -41,7 +56,17 @@ const defaultPrompts = [
 ]
 
 function isAbortError(error: unknown) {
-  return error instanceof DOMException && error.name === 'AbortError'
+  if (error instanceof DOMException && error.name === 'AbortError') {
+    return true
+  }
+
+  if (typeof error === 'object' && error) {
+    const maybeCanceledError = error as { code?: unknown; name?: unknown }
+
+    return maybeCanceledError.code === 'ERR_CANCELED' || maybeCanceledError.name === 'CanceledError'
+  }
+
+  return false
 }
 
 function isNearScrollBottom(element: HTMLElement) {
@@ -56,81 +81,73 @@ function isScrollable(element: HTMLElement) {
   return element.scrollHeight > element.clientHeight + 1
 }
 
-function normalizeMarkdownText(value: string) {
-  return value.replace(/\r\n/g, '\n').replace(/[ \t]+/g, ' ').trim()
+function renderStreamCursor() {
+  return <span className={styles.bookAiStreamCursor} aria-hidden="true" />
 }
 
-function getChapterTitleCandidates(chapterTitle?: string) {
-  if (!chapterTitle) return []
+function renderMarkdownChildrenWithCursor(children: ReactNode): ReactNode {
+  return Children.map(children, (child) => {
+    if (typeof child === 'string') {
+      if (!child.includes(markdownCursorMarker)) {
+        return child
+      }
 
-  const title = chapterTitle.trim()
-  const shortTitle = title.split(/\s+/).at(-1)
+      const parts = child.split(markdownCursorMarker)
 
-  return Array.from(new Set([title, shortTitle].filter((item): item is string => Boolean(item))))
-}
+      return parts.flatMap((part, index) =>
+        index === parts.length - 1 ? [part] : [part, renderStreamCursor()],
+      )
+    }
 
-function extractChapterExcerpt(bookContent?: string, chapterTitle?: string) {
-  if (!bookContent) return ''
+    if (isValidElement(child)) {
+      const element = child as ReactElement<{ children?: ReactNode }>
 
-  const content = normalizeMarkdownText(bookContent)
-  const candidates = getChapterTitleCandidates(chapterTitle)
+      return cloneElement(element, undefined, renderMarkdownChildrenWithCursor(element.props.children))
+    }
 
-  if (candidates.length === 0) {
-    return content.slice(0, excerptLength)
-  }
-
-  const lines = content.split('\n')
-  const startIndex = lines.findIndex((line) => {
-    const headingText = line.replace(/^#{1,6}\s*/, '').trim()
-    if (!headingText) return false
-
-    return candidates.some(
-      (candidate) =>
-        headingText === candidate || headingText.includes(candidate) || candidate.includes(headingText),
-    )
+    return child
   })
+}
 
-  if (startIndex < 0) {
-    return content.slice(0, excerptLength)
-  }
-
-  const endIndex = lines.findIndex((line, index) => index > startIndex && /^#{1,6}\s+/.test(line))
-  const chapterLines = lines.slice(startIndex, endIndex > startIndex ? endIndex : undefined)
-
-  return chapterLines.join('\n').slice(0, excerptLength)
+const markdownComponents = {
+  p: ({ children }: { children?: ReactNode }) => <p>{renderMarkdownChildrenWithCursor(children)}</p>,
+  h1: ({ children }: { children?: ReactNode }) => <h1>{renderMarkdownChildrenWithCursor(children)}</h1>,
+  h2: ({ children }: { children?: ReactNode }) => <h2>{renderMarkdownChildrenWithCursor(children)}</h2>,
+  h3: ({ children }: { children?: ReactNode }) => <h3>{renderMarkdownChildrenWithCursor(children)}</h3>,
+  li: ({ children }: { children?: ReactNode }) => <li>{renderMarkdownChildrenWithCursor(children)}</li>,
 }
 
 function buildBookAiRequest({
   question,
-  bookTitle,
-  chapterTitle,
-  bookContent,
   sessionId,
+  knowledgeBaseId,
+  bookId,
+  chapterId,
 }: {
   question: string
-  bookTitle?: string
-  chapterTitle?: string
-  bookContent?: string
   sessionId: string
-}): BookAiChatRequest {
-  const excerpt = extractChapterExcerpt(bookContent, chapterTitle)
-  const context = [
-    '你是一个书籍阅读 AI 助手。请基于给定书籍上下文回答用户问题；如果上下文不足，请明确说明。',
-    bookTitle ? `书名：${bookTitle}` : '',
-    chapterTitle ? `当前章节：${chapterTitle}` : '',
-    excerpt ? `原文片段：\n${excerpt}` : '',
-    `用户问题：${question}`,
-  ]
-    .filter(Boolean)
-    .join('\n\n')
-
+  knowledgeBaseId?: string
+  bookId?: string
+  chapterId?: string
+}): BookChatRequest {
   return {
-    query: context,
-    session_id: sessionId,
+    sessionId,
+    knowledgeBaseId,
+    bookId,
+    chapterId,
+    question,
   }
 }
 
-export default function BookAi({ bookTitle, chapterTitle, bookContent, isBookLoading, bookError }: BookAiProps) {
+export default function BookAi({
+  knowledgeBaseId,
+  bookId,
+  chapterId,
+  bookTitle,
+  chapterTitle,
+  isBookLoading,
+  bookError,
+}: BookAiProps) {
   const [query, setQuery] = useState('')
   const [messages, setMessages] = useState<BookAiMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
@@ -144,6 +161,10 @@ export default function BookAi({ bookTitle, chapterTitle, bookContent, isBookLoa
   const pendingAutoScrollRef = useRef(false)
   const lastScrollTopRef = useRef(0)
   const programmaticScrollTimerRef = useRef<number | undefined>(undefined)
+  const typewriterQueueRef = useRef<string[]>([])
+  const typewriterTimerRef = useRef<number | undefined>(undefined)
+  const activeAssistantMessageIdRef = useRef<number | undefined>(undefined)
+  const pendingFinishAssistantMessageIdRef = useRef<number | undefined>(undefined)
   const isSubmitDisabled = !query.trim() || isStreaming || isBookLoading || Boolean(bookError)
   const prompts = useMemo(() => {
     if (!chapterTitle) return defaultPrompts
@@ -162,6 +183,10 @@ export default function BookAi({ bookTitle, chapterTitle, bookContent, isBookLoa
 
       if (programmaticScrollTimerRef.current !== undefined) {
         window.clearTimeout(programmaticScrollTimerRef.current)
+      }
+
+      if (typewriterTimerRef.current !== undefined) {
+        window.clearTimeout(typewriterTimerRef.current)
       }
     }
   }, [])
@@ -276,6 +301,67 @@ export default function BookAi({ bookTitle, chapterTitle, bookContent, isBookLoa
     setIsStreaming(false)
   }
 
+  function clearTypewriter() {
+    if (typewriterTimerRef.current !== undefined) {
+      window.clearTimeout(typewriterTimerRef.current)
+      typewriterTimerRef.current = undefined
+    }
+
+    typewriterQueueRef.current = []
+    activeAssistantMessageIdRef.current = undefined
+    pendingFinishAssistantMessageIdRef.current = undefined
+  }
+
+  function scheduleTypewriter() {
+    if (typewriterTimerRef.current !== undefined) {
+      return
+    }
+
+    typewriterTimerRef.current = window.setTimeout(() => {
+      typewriterTimerRef.current = undefined
+
+      const assistantMessageId = activeAssistantMessageIdRef.current
+
+      if (assistantMessageId === undefined) {
+        return
+      }
+
+      const nextChunk = typewriterQueueRef.current.splice(0, typewriterCharsPerTick).join('')
+
+      if (nextChunk) {
+        queueAutoScroll()
+        updateAssistantMessage(assistantMessageId, (assistantMessage) => ({
+          ...assistantMessage,
+          content: `${assistantMessage.content}${nextChunk}`,
+        }))
+        scheduleTypewriter()
+        return
+      }
+
+      if (pendingFinishAssistantMessageIdRef.current === assistantMessageId) {
+        pendingFinishAssistantMessageIdRef.current = undefined
+        activeAssistantMessageIdRef.current = undefined
+        queueAutoScroll()
+        updateAssistantMessage(assistantMessageId, (assistantMessage) => ({
+          ...assistantMessage,
+          isStreaming: false,
+        }))
+        setIsStreaming(false)
+      }
+    }, typewriterInterval)
+  }
+
+  function enqueueTypewriterChunk(assistantMessageId: number, chunk: string) {
+    activeAssistantMessageIdRef.current = assistantMessageId
+    typewriterQueueRef.current.push(...Array.from(chunk))
+    scheduleTypewriter()
+  }
+
+  function finishTypewriterWhenDrained(assistantMessageId: number) {
+    pendingFinishAssistantMessageIdRef.current = assistantMessageId
+    scheduleTypewriter()
+  }
+
   function handleSubmit(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault()
 
@@ -283,6 +369,7 @@ export default function BookAi({ bookTitle, chapterTitle, bookContent, isBookLoa
     if (!submittedQuery || isSubmitDisabled) return
 
     chatAbortControllerRef.current?.abort()
+    clearTypewriter()
     chatAbortControllerRef.current = new AbortController()
     shouldAutoScrollRef.current = true
     isUserViewingHistoryRef.current = false
@@ -299,46 +386,43 @@ export default function BookAi({ bookTitle, chapterTitle, bookContent, isBookLoa
       { id: userMessageId, role: 'user', content: submittedQuery },
       { id: assistantMessageId, role: 'assistant', content: '', isStreaming: true },
     ])
+    activeAssistantMessageIdRef.current = assistantMessageId
 
     const request = buildBookAiRequest({
       question: submittedQuery,
-      bookTitle,
-      chapterTitle,
-      bookContent,
       sessionId: sessionIdRef.current,
+      knowledgeBaseId,
+      bookId,
+      chapterId,
     })
 
-    void streamChat(request, {
+    void streamBookQuestion(request, {
       signal: chatAbortControllerRef.current.signal,
       onFrame: (frame) => {
         if (frame.chunk) {
           queueAutoScroll()
-          updateAssistantMessage(assistantMessageId, (assistantMessage) => ({
-            ...assistantMessage,
-            content: `${assistantMessage.content}${frame.chunk}`,
-          }))
+          enqueueTypewriterChunk(assistantMessageId, frame.chunk)
         }
 
         if (frame.finish_reason === 'stop') {
           chatAbortControllerRef.current = undefined
           queueAutoScroll()
-          updateAssistantMessage(assistantMessageId, (assistantMessage) => ({
-            ...assistantMessage,
-            isStreaming: false,
-          }))
-          setIsStreaming(false)
+          finishTypewriterWhenDrained(assistantMessageId)
         }
       },
       onError: (errorEvent) => {
         queueAutoScroll()
+        clearTypewriter()
         failAssistantMessage(assistantMessageId, errorEvent.message)
       },
-    }).catch((error: unknown) => {
-      if (isAbortError(error)) return
-
-      queueAutoScroll()
-      failAssistantMessage(assistantMessageId, fallbackErrorMessage)
     })
+      .catch((error: unknown) => {
+        if (isAbortError(error)) return
+
+        queueAutoScroll()
+        clearTypewriter()
+        failAssistantMessage(assistantMessageId, fallbackErrorMessage)
+      })
   }
 
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -398,8 +482,11 @@ export default function BookAi({ bookTitle, chapterTitle, bookContent, isBookLoa
                 <div className={styles.bookAiBubble}>
                   {message.role === 'assistant' ? (
                     <div className={styles.bookAiMarkdown}>
-                      <ReactMarkdown>{message.content || '正在分析...'}</ReactMarkdown>
-                      {message.isStreaming && <span className={styles.bookAiStreamCursor} aria-hidden="true" />}
+                      <ReactMarkdown components={markdownComponents}>
+                        {message.isStreaming
+                          ? `${message.content || '正在分析...'}${markdownCursorMarker}`
+                          : message.content}
+                      </ReactMarkdown>
                     </div>
                   ) : (
                     <p>{message.content}</p>

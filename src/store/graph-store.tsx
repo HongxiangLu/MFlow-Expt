@@ -36,6 +36,8 @@ type KnowledgeGraphStore = {
 }
 
 const focusedCameraRatio = 0.55
+const minCameraRatio = 0.05
+const maxCameraRatio = 8
 
 const nodeTypeColorMap: Record<string, string> = {
   artifact: '#d4af37',
@@ -76,10 +78,10 @@ function getNodeColor(nodeType: GraphNodeType) {
 
 function getNodeSize(nodeType: GraphNodeType, isCenterNode: boolean, degree: number) {
   if (isCenterNode || nodeType === 'artifact') {
-    return 18
+    return 13
   }
 
-  return Math.min(14, 9 + degree)
+  return Math.min(9, 5 + degree * 0.5)
 }
 
 function getEdgeLabel(label: string) {
@@ -107,8 +109,8 @@ function buildGraph(graphResponse: GraphResponse | null) {
       label: node.label,
       size: getNodeSize(node.nodeType, isCenterNode, degrees[node.id] ?? 0),
       color: getNodeColor(node.nodeType),
-      x: isCenterNode ? 0 : Math.cos(index) * 4,
-      y: isCenterNode ? 0 : Math.sin(index) * 4,
+      x: isCenterNode ? 0 : Math.cos(index * 2.399963) * (7 + index * 0.24),
+      y: isCenterNode ? 0 : Math.sin(index * 2.399963) * (7 + index * 0.24),
     })
   })
 
@@ -131,9 +133,9 @@ function buildGraph(graphResponse: GraphResponse | null) {
     forceAtlas2.assign(graph, {
       iterations: 160,
       settings: {
-        gravity: 2.0,
-        scalingRatio: 2.5,
-        slowDown: 6,
+        gravity: 1.25,
+        scalingRatio: 5,
+        slowDown: 8,
         edgeWeightInfluence: 0.85,
       },
     })
@@ -226,6 +228,8 @@ export function useKnowledgeGraphStoreController() {
       labelRenderedSizeThreshold: 6,
       labelSize: 13,
       labelWeight: '600',
+      maxCameraRatio,
+      minCameraRatio,
       renderEdgeLabels: true,
       renderLabels: true,
       stagePadding: 38,
