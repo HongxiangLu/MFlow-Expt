@@ -8,6 +8,7 @@ export type {
   BookAnchor,
   BookChatRequest,
   BookChatResponse,
+  BookChatScope,
   BookChapter,
   BookEntityMention,
   BookListItem,

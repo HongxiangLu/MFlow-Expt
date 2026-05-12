@@ -1,4 +1,4 @@
-import { Children, cloneElement, isValidElement, useState, type ReactElement, type ReactNode } from 'react'
+import { Children, Fragment, cloneElement, isValidElement, useState, type ReactElement, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import {
   Archive,
@@ -59,9 +59,12 @@ function renderMarkdownChildrenWithCursor(children: ReactNode): ReactNode {
 
       const parts = child.split(markdownCursorMarker)
 
-      return parts.flatMap((part, index) =>
-        index === parts.length - 1 ? [part] : [part, renderStreamCursor()],
-      )
+      return parts.map((part, index) => (
+        <Fragment key={`stream-cursor-part-${index}`}>
+          {part}
+          {index < parts.length - 1 && renderStreamCursor()}
+        </Fragment>
+      ))
     }
 
     if (isValidElement(child)) {

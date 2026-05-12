@@ -18,7 +18,7 @@ import { MessageSquare, Send, Sparkles } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 
 import { createSessionId, streamBookQuestion } from '../../services'
-import type { BookChatRequest } from '../../types'
+import type { BookChatRequest, BookChatScope } from '../../types'
 import styles from './book.module.scss'
 
 type BookAiRole = 'user' | 'assistant'
@@ -123,18 +123,21 @@ function buildBookAiRequest({
   knowledgeBaseId,
   bookId,
   chapterId,
+  chatScope,
 }: {
   question: string
   sessionId: string
   knowledgeBaseId?: string
   bookId?: string
   chapterId?: string
+  chatScope?: BookChatScope
 }): BookChatRequest {
   return {
     sessionId,
     knowledgeBaseId,
     bookId,
     chapterId,
+    chatScope,
     question,
   }
 }
@@ -151,6 +154,7 @@ export default function BookAi({
   const [query, setQuery] = useState('')
   const [messages, setMessages] = useState<BookAiMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
+  const [chatScope, setChatScope] = useState<BookChatScope>('chapter')
   const nextMessageId = useRef(1)
   const sessionIdRef = useRef(createSessionId())
   const chatAbortControllerRef = useRef<AbortController | undefined>(undefined)
@@ -167,6 +171,15 @@ export default function BookAi({
   const pendingFinishAssistantMessageIdRef = useRef<number | undefined>(undefined)
   const isSubmitDisabled = !query.trim() || isStreaming || isBookLoading || Boolean(bookError)
   const prompts = useMemo(() => {
+    if (chatScope === 'book') {
+      return [
+        '总结整本书的核心内容',
+        '提炼这本书的重要人物和概念',
+        '梳理全书的主题结构',
+        '给出 3 个可以继续追问的问题',
+      ]
+    }
+
     if (!chapterTitle) return defaultPrompts
 
     return [
@@ -175,7 +188,7 @@ export default function BookAi({
       '这章和全书主题有什么关系',
       '基于这一章生成复习问题',
     ]
-  }, [chapterTitle])
+  }, [chatScope, chapterTitle])
 
   useEffect(() => {
     return () => {
@@ -190,6 +203,12 @@ export default function BookAi({
       }
     }
   }, [])
+
+  useEffect(() => {
+    if (!chapterId) {
+      setChatScope('book')
+    }
+  }, [chapterId])
 
   const scrollChatToBottom = () => {
     const chatContent = chatContentRef.current
@@ -394,6 +413,7 @@ export default function BookAi({
       knowledgeBaseId,
       bookId,
       chapterId,
+      chatScope,
     })
 
     void streamBookQuestion(request, {
@@ -448,7 +468,32 @@ export default function BookAi({
               <Sparkles size={22} />
             </div>
             <h2>{bookTitle ? `和 AI 讨论《${bookTitle}》` : '和 AI 讨论这本书'}</h2>
-            <p>{chapterTitle ? `当前章节：${chapterTitle}` : '当前范围：整本书'}</p>
+            <p>
+              {chatScope === 'book'
+                ? '当前范围：整本书'
+                : chapterTitle
+                  ? `当前章节：${chapterTitle}`
+                  : '当前范围：整本书'}
+            </p>
+
+            <div className={styles.bookAiScopeSwitch} role="group" aria-label="AI 对话范围">
+              <button
+                type="button"
+                className={chatScope === 'chapter' ? styles.bookAiScopeButtonActive : styles.bookAiScopeButton}
+                disabled={!chapterId || isStreaming}
+                onClick={() => setChatScope('chapter')}
+              >
+                当前章节
+              </button>
+              <button
+                type="button"
+                className={chatScope === 'book' ? styles.bookAiScopeButtonActive : styles.bookAiScopeButton}
+                disabled={isStreaming}
+                onClick={() => setChatScope('book')}
+              >
+                整本书
+              </button>
+            </div>
 
             <div className={styles.bookAiPromptGrid}>
               {prompts.map((prompt) => (

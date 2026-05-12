@@ -1,4 +1,4 @@
-import { apiPaths, getApiUrl, http, type RequestOptions } from './api'
+import { apiPaths, bookHttp, getBookApiUrl, type RequestOptions } from './api'
 import type {
   BookChatRequest,
   BookChatResponse,
@@ -49,19 +49,19 @@ function normalizeBookTextResponse(response: BookTextApiData): BookTextResponse 
 }
 
 export async function getBookList({ signal }: BookListRequestOptions = {}) {
-  const response = await http.get<ApiEnvelope<BookListResponse>>(apiPaths.bookList, { signal })
+  const response = await bookHttp.get<ApiEnvelope<BookListResponse>>(apiPaths.bookList, { signal })
 
   return response.data.data
 }
 
 export async function getBookContent(bookId: string, { signal }: RequestOptions = {}) {
-  const response = await http.get<ApiEnvelope<BookTextApiData>>(apiPaths.bookContent(bookId), { signal })
+  const response = await bookHttp.get<ApiEnvelope<BookTextApiData>>(apiPaths.bookContent(bookId), { signal })
 
   return normalizeBookTextResponse(response.data.data)
 }
 
 export async function getBookChapterContent(chapterId: string, { signal }: RequestOptions = {}) {
-  const response = await http.get<ApiEnvelope<BookTextApiData>>(
+  const response = await bookHttp.get<ApiEnvelope<BookTextApiData>>(
     apiPaths.bookChapterContent(chapterId),
     { signal },
   )
@@ -70,7 +70,7 @@ export async function getBookChapterContent(chapterId: string, { signal }: Reque
 }
 
 export async function getBookGraph(bookId: string, { signal }: RequestOptions = {}) {
-  const response = await http.get<ApiEnvelope<GraphResponse>>(apiPaths.bookGraph, {
+  const response = await bookHttp.get<ApiEnvelope<GraphResponse>>(apiPaths.bookGraph, {
     signal,
     params: { bookId },
   })
@@ -79,7 +79,7 @@ export async function getBookGraph(bookId: string, { signal }: RequestOptions = 
 }
 
 export async function getBookGraphNodeSources(nodeId: string, bookId: string, { signal }: RequestOptions = {}) {
-  const response = await http.get<ApiEnvelope<BookSourceRef[]>>(apiPaths.bookGraphNodeSources(nodeId), {
+  const response = await bookHttp.get<ApiEnvelope<BookSourceRef[]>>(apiPaths.bookGraphNodeSources(nodeId), {
     signal,
     params: { bookId },
   })
@@ -88,7 +88,7 @@ export async function getBookGraphNodeSources(nodeId: string, bookId: string, { 
 }
 
 export async function askBookQuestion(request: BookChatRequest, { signal }: RequestOptions = {}) {
-  const response = await http.post<ApiEnvelope<BookChatResponse>>(apiPaths.bookChat, request, { signal })
+  const response = await bookHttp.post<ApiEnvelope<BookChatResponse>>(apiPaths.bookChat, request, { signal })
 
   return response.data.data
 }
@@ -133,7 +133,7 @@ export async function streamBookQuestion(
   request: BookChatRequest,
   { signal, onFrame, onError }: BookChatStreamOptions = {},
 ) {
-  const response = await fetch(getApiUrl(apiPaths.bookChat), {
+  const response = await fetch(getBookApiUrl(apiPaths.bookChat), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

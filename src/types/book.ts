@@ -65,11 +65,14 @@ export type BookSelectedText = {
   endOffset: number
 }
 
+export type BookChatScope = 'chapter' | 'book'
+
 export type BookChatRequest = {
   sessionId: string
   knowledgeBaseId?: string
   bookId?: string
   chapterId?: string
+  chatScope?: BookChatScope
   question: string
   selectedText?: BookSelectedText
 }

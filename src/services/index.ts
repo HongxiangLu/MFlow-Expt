@@ -1,4 +1,13 @@
-export { apiBaseUrl, apiPaths, getApiUrl, http } from './api'
+export {
+  apiBaseUrl,
+  apiPaths,
+  bookApiBaseUrl,
+  bookHttp,
+  dashboardApiBaseUrl,
+  getApiUrl,
+  getBookApiUrl,
+  http,
+} from './api'
 export type { RequestOptions } from './api'
 export { ChatStreamError, createSessionId, streamChat } from './dialogue'
 export type { ChatStreamOptions } from './dialogue'

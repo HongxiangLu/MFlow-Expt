@@ -450,6 +450,49 @@ $border: #e1e3e6;
   line-height: 1.6;
 }
 
+.bookAiScopeSwitch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #dbe3ee;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.bookAiScopeButton,
+.bookAiScopeButtonActive {
+  min-width: 76px;
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.bookAiScopeButton:hover,
+.bookAiScopeButton:focus-visible {
+  background: #f1f5f9;
+  color: #1f2937;
+  outline: none;
+}
+
+.bookAiScopeButtonActive {
+  background: #e0ecff;
+  color: #1d4ed8;
+}
+
+.bookAiScopeButton:disabled,
+.bookAiScopeButtonActive:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
 .bookAiPromptGrid {
   width: min(640px, 100%);
   display: grid;
