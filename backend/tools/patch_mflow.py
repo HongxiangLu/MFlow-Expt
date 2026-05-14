@@ -339,6 +339,16 @@ def patch_entity_type_pydantic_schema(sp: Path) -> PatchResult:
     return _apply_text_patch(target, old, new, label="实体 Schema 描述")
 
 
+def patch_extract_entity_names_prompt(sp: Path) -> PatchResult:
+    """修改实体名称提取提示词 → 输出 JSON 对象而非裸数组（兼容 MiniMax）。"""
+    target = sp / "m_flow" / "llm" / "prompts" / "extract_entity_names.txt"
+
+    old = "Output JSON array of entity names only."
+    new = 'Output a JSON object with a "names" field containing the array of entity names.'
+
+    return _apply_text_patch(target, old, new, label="实体名称提取提示词")
+
+
 # ──────────────────────────────────────────────────────────────
 # 主函数
 # ──────────────────────────────────────────────────────────────
@@ -350,6 +360,7 @@ ALL_PATCHES = [
     patch_entity_type_pydantic_schema,
     patch_llm_gateway_system_role,
     patch_adapter_build_messages,
+    patch_extract_entity_names_prompt,
     patch_version_package_name,
     patch_ui_download_url,
     patch_query_time_parser,
@@ -360,6 +371,7 @@ ALL_PATCHES = [
 ALL_FILES_RELATIVE = [
     "m_flow/llm/prompts/write_entity_descriptions.txt",
     "m_flow/llm/prompts/knowledge_graph_extractor.txt",
+    "m_flow/llm/prompts/extract_entity_names.txt",
     "m_flow/memory/episodic/models.py",
     "m_flow/llm/LLMGateway.py",
     "m_flow/llm/backends/litellm_instructor/llm/openai/adapter.py",

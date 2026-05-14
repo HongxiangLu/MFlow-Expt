@@ -242,13 +242,46 @@ def _build_messages(self, user_input: str, system_prompt: str) -> list:
 
 > **注意配置细节**：在 `backend/.env` 中**无需**配置 `LLM_ENDPOINT` 以及 `LLM_PROVIDER=custom` 属性，否则会导致 litellm 路由退化为兼容模式，掩盖了原生路由（报 `MinimaxException`）触发的问题。配置前缀 `minimax/` 即足以让它自动定位官方地址（国际版：https://api.minimax.io/v1）。
 
+### 实体名称提取的 Prompt 与 Pydantic Schema 不匹配
+
+在使用 MiniMax 模型执行 `memorize()` 入库流程的实体名称提取（Entity Name Extraction）阶段时，可能会遇到如下 Pydantic 校验异常：
+
+```
+1 validation error for ConceptNamesResult
+Input should be an object [type=model_type, input_value=['同治通宝（雕母...字款', '海棠式碟'], input_type=list]
+```
+
+#### 报错原因
+
+这是底层提示词模板（Prompt）的输出格式指示与 Pydantic 模型定义之间的不一致导致的。
+
+1. **Prompt 指示 LLM 输出裸数组**：`extract_entity_names.txt` 模板的最后一行为 `Output JSON array of entity names only.`，这直接指导 LLM 输出一个裸 JSON 数组，例如 `["同治通宝", "清", ...]`。
+2. **Pydantic 模型期望对象包裹**：代码中接收结果的 `ConceptNamesResult` 模型（位于 `models.py`）定义了一个 `names` 字段，期望接收的是 JSON 对象格式：`{"names": ["同治通宝", "清", ...]}`。
+3. **MiniMax 严格遵循 Prompt 字面指示**：与 OpenAI GPT 系列模型不同，MiniMax-M2.7 更倾向于严格按照 Prompt 的文字要求输出裸数组，而忽略 `instructor` 库注入的 JSON Schema 约束。`instructor` 拿到一个 `list` 而非 `dict`，Pydantic 校验自然失败并抛出 `model_type` 错误。
+
+#### 解决方案
+
+修改提示词模板，使其输出格式指示与 Pydantic 模型结构保持一致：
+
+*   **修改目标文件六**：`项目环境路径\Lib\site-packages\m_flow\llm\prompts\extract_entity_names.txt`
+
+定位到文件末尾（第 20 行），将输出格式指令修改为要求输出 JSON 对象：
+
+```text
+# 修改前
+Output JSON array of entity names only.
+
+# 修改后 (要求输出带 "names" 字段的 JSON 对象，与 Pydantic Schema 匹配)
+Output a JSON object with a "names" field containing the array of entity names.
+```
+
 ### M-Flow 版本标识修正
 
 若需要执行 `mflow -ui` 启动内置可视化界面，由于底层包名变更及 GitHub 仓库所有者迁移，需要手动对环境中的 M-Flow 源代码进行以下两处修正：
 
 **修正版本获取包名**
 
-*   **修改目标文件六**：`项目环境路径\Lib\site-packages\m_flow\version.py`
+*   **修改目标文件七**：`项目环境路径\Lib\site-packages\m_flow\version.py`
 
 *   **修改点**：定位到第 30 行，将 `importlib.metadata.version` 的参数由旧包名改为新包名。
 
@@ -262,7 +295,7 @@ _CACHED = importlib.metadata.version("mflow-ai")
 
 **修正 UI 静态资源下载地址**
 
-*   **修改目标文件七**：`项目环境路径\Lib\site-packages\m_flow\api\v1\ui\ui.py`
+*   **修改目标文件八**：`项目环境路径\Lib\site-packages\m_flow\api\v1\ui\ui.py`
 
 *   **修改点**：定位到第 110 行，更新 GitHub 仓库的所有者名称。
 
@@ -282,7 +315,7 @@ url = f"https://github.com/FlowElement-ai/m_flow/archive/refs/tags/v{clean}.zip"
 
 **修改时间解析器**
 
-*   **修改目标文件八**：`项目环境路径\Lib\site-packages\m_flow\retrieval\time\query_time_parser.py`
+*   **修改目标文件九**：`项目环境路径\Lib\site-packages\m_flow\retrieval\time\query_time_parser.py`
 *   **修改点**：定位到第 992 行，改用 `timedelta` 计算偏移量以兼容负数时间戳。
 
 ```python
@@ -296,7 +329,7 @@ now_dt = datetime(1970, 1, 1, tzinfo=timezone.utc) + timedelta(seconds=now_ms / 
 
 **修改时间提取器（防御性修正）**
 
-*   **修改目标文件九**：`项目环境路径\Lib\site-packages\m_flow\retrieval\time\mentioned_time_extractor.py`
+*   **修改目标文件十**：`项目环境路径\Lib\site-packages\m_flow\retrieval\time\mentioned_time_extractor.py`
 *   **修改点**：定位到第 127 行，避免直接调用 `.timestamp()`。
 
 ```python
@@ -385,7 +418,7 @@ content
 
 需要修改环境中的 M-Flow 源代码文件：
 
-**修改目标文件十：`项目环境路径\Lib\site-packages\m_flow\search\methods\search.py`**
+**修改目标文件十一：`项目环境路径\Lib\site-packages\m_flow\search\methods\search.py`**
 
 定位到 `_authorized_search_impl` 函数中 `use_combined_context` 分支的末尾（第 398 行），在调用 `completion_fn` 之前增加 `only_context` 判断：
 

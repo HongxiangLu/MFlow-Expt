@@ -117,6 +117,9 @@ backend/
             2. **显式属性提取**：读取节点 `attributes` 字典中由 LLM 抽取的 `entity_type`, `category` 等字段值。
             3. **原始类映射**：尝试将 M-Flow 返回的底层 `node.type` 直接匹配为标准业务类型（作为对特殊直存节点的兼容）。
             4. **兜底降级**：若上述步骤全部失败，或解析出的类别不在 `API.md` 定义的 12 种标准业务类型中，统一降级为 `other`，保障前端渲染安全。
+
+            > **M-Flow 节点层级与业务类型的关系**：M-Flow 的情境记忆图谱 (Episodic Memory Graph) 中同时存在四种不同层级的节点：**Episode**（情境片段，代表一段原始文本的语义切片）、**Facet**（切面，Episode 下的子主题）、**FacetPoint**（知识点，子主题中的一条具体陈述）和 **Entity**（实体，从文本中提取的名词概念）。在 M-Flow 的知识提取流程中，大模型**仅会为 Entity 层级的节点**赋予业务分类（如 `artifact`、`dynasty`），因为只有 Entity 代表的是具体的名词概念，才具备"属于哪个类别"的语义。而 Episode、Facet、FacetPoint 本质上是**文档结构容器**——它们分别代表"一段话"、"一个话题"和"一句陈述"，不属于任何业务分类，因此在四级降级管线中始终会落入兜底的 `other`。这是符合预期的正常行为，不是 Bug。
+
         *   **`centerNodeId`**: 由后端优先选取首个 `artifact` 类型节点；若不存在 `artifact`，则降级选取结果中的首个节点。
         *   **`edges`**: 将 M-Flow 的关系转换为带唯一 ID（如 `f"{source}_{label}_{target}"`）的标准 `GraphEdge`。
     *   **图谱后处理过滤层** (`_filter_graph_nodes_and_edges`)：
@@ -131,10 +134,12 @@ backend/
             | `Episode`   | 0 | 语义切分单元，信息密度最高 |
             | `Facet`     | 1 | Episode 下的主题切面 |
             | `FacetPoint`| 2 | Facet 的细粒度信息点 |
-            | `Entity`    | 3 | 原子实体节点 |
+            | `Entity`    | 3 | 原子实体节点，**唯一能被 LLM 赋予业务类型的层级** |
             | 其他         | 99 | 默认最低优先级 |
 
-            > **设计决策**：去重基于映射前的 M-Flow 原始类型而非映射后的业务类型 (`nodeType`)，因为 Episode/Facet/FacetPoint/Entity 在 `STANDARD_NODE_TYPES` 映射后均归为 `"other"`，无法区分优先级。为此在节点 dict 中注入 `_raw_type` 临时字段传递原始类型信息，过滤完成后通过 `dict.pop()` 自动清理，确保不泄露到最终的 API 响应中。
+            > **设计决策**：去重基于映射前的 M-Flow 原始类型而非映射后的业务类型 (`nodeType`)，因为 Episode/Facet/FacetPoint 本身无业务分类（始终为 `other`），仅 Entity 携带有效业务类型。为此在节点 dict 中注入 `_raw_type` 临时字段传递原始类型信息，过滤完成后通过 `dict.pop()` 自动清理，确保不泄露到最终的 API 响应中。
+            >
+            > **类型继承机制**：当高优先级的结构节点（如 Episode）因同名去重而"吞并"低优先级的 Entity 节点时，若 Episode 自身的 `nodeType` 为 `other` 而被吞并的 Entity 携带了有效的业务类型（如 `artifact`），去重逻辑会将该业务类型**继承**到保留的节点上。反之，若被丢弃的低优先级节点携带有效业务类型而当前最佳节点没有，同样会进行补充。此机制确保同名去重不会导致业务分类信息的丢失。
 
         3.  **悬挂边清理**（边级）：上述两步可能删除部分节点，导致某些边的 `source` 或 `target` 指向不存在的节点（即"悬挂边" / dangling edge）。此步骤利用过滤后的有效节点 ID 集合高效过滤掉所有悬挂边，保持图结构的引用完整性。
 
