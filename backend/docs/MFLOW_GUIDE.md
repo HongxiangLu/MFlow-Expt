@@ -22,8 +22,9 @@
 | `chunk_index` | 在整篇文档中的分块序号 |
 | `cut_type` | 切分策略（如 `paragraph_end`） |
 
-此外，系统还会在 `metadata.sentence_classifications` 中将每段文字进一步拆分为**单独的句子**，
-并为每句话标注 `event_topic`（事件主题）和 `event_focus`（事件焦点），为后续的路由和聚合提供依据。
+在启用句子级路由后，系统会在 `metadata.sentence_classifications` 中将每段文字进一步拆分为**单独的句子**，
+并为每句话标注 `event_id`、`routing_type`（`episodic` / `atomic`）、`event_topic`（事件主题）等信息，
+为后续的 Episode 路由与聚合提供依据。
 
 ### 1.2 知识抽取（Information Extraction）
 
@@ -42,6 +43,22 @@
 
 上述产物之间通过语义边互相连接，最终形成结构化的知识图谱，写入图数据库。
 
+### 1.4 原文证据链（源码实证）
+
+M-Flow 中“原文到情景记忆”的关键链路是：
+
+`Document <-is_part_of- ContentFragment <-made_from- FragmentDigest ->(参与生成)-> Episode`
+
+以及入图后的证据挂载链：
+
+`Episode -> includes_chunk -> ContentFragment -> is_part_of -> Document`
+
+其中：
+- `ContentFragment` 是真正保存原文文本（`text`）的节点；
+- `Document` 是文档容器（名称、路径、MIME 等元信息）；
+- `FragmentDigest` 是中间摘要节点，`made_from` 指向来源 chunk；
+- `Episode` 通过 `includes_chunk` 挂接证据 chunk，而不是直接 `belongs_to_document`。
+
 ---
 
 ## 二、知识图谱的组织结构
@@ -58,7 +75,8 @@ MemorySpace (记忆空间 — 最高级逻辑隔离边界)
 │   │                  └── has_point ──→ FacetPoint (细粒度信息点)
 │   │                                         └── involves_entity ──→ Entity
 │   ├── involves_entity ──→ Entity (实体：人名/书名/地点等)
-│   └── includes_chunk ──→ ContentFragment (原始文本切片)
+│   └── includes_chunk ──→ ContentFragment (证据文本切片)
+│                             └── is_part_of ──→ Document (原文容器)
 │
 └── Procedure (过程记忆锚点 — 方法论/操作步骤)
     ├── has_context_point ──→ ProcedureContextPoint (前置条件/适用场景)
@@ -73,7 +91,7 @@ MemorySpace (记忆空间 — 最高级逻辑隔离边界)
 | `Episode` | 情景记忆锚点，聚合多个原文片段 | `summary` | ✓（`summary`） |
 | `Facet` | Episode 的细节维度 | `search_text`, `anchor_text` | ✓（`search_text`, `anchor_text`） |
 | `FacetPoint` | Facet 下的细粒度信息点 | `search_text` | ✓（`search_text`） |
-| `Entity` | 原子级实体（人、物、概念） | `name`, `description` | ✓（`name`, `canonical_name`） |
+| `Entity` | 原子级实体，按 Episode 拆分独立存在 | `name`, `description`, `canonical_name` | ✓（`name`, `canonical_name`） |
 | `ContentFragment` | 原始文本切片（保留原文） | `text` | ✓（`text`） |
 | `Procedure` | 过程记忆锚点（方法/SOP） | `summary` | ✓（`summary`） |
 | `ProcedureContextPoint` | 操作步骤的前置条件 | — | — |
@@ -86,24 +104,46 @@ MemorySpace (记忆空间 — 最高级逻辑隔离边界)
 
 #### A. 实体桥梁（`same_entity_as` 边）
 
-这是最重要的跨树连接方式。M-Flow 采用了精巧的**「实体克隆 + 归一化连线」**策略来避免超级节点问题：
+这是最重要的跨树连接方式。M-Flow 采用了**「上下文实体 + 规范名连线」**策略来保留语义并避免超级节点问题。
 
-- 当树 A 和树 B 都提到「李白」时，它们各自生成一个**独立的** `Entity` 节点（携带各自语境下的描述）。
-- 系统通过统一的 `canonical_name`（规范名）识别出它们指代同一实体，
-  并在两个节点之间建立 `same_entity_as` 边。
-- **效果**：既实现了跨树的逻辑贯通（可沿 `same_entity_as` 跳转），
-  又避免了让一个节点变成拥有几万条边的「超级节点」（Dense Sub-graph 问题）。
+**深入底层的 Entity 生成与隔离机制**：
+- **无显式关联字段**：`Entity` 节点的数据模型本身**不包含** `episode_id` 或 `dataset_id` 字段。
+- **隐式 ID 隔离**：在创建 `Entity` 节点时，其底层 UUID 是由 `episode_id` 和实体名称共同哈希生成的（即 `hash(episode_id + name)`）。这意味着当多个不同的 `Episode` 提到同一个实体（如「OpenAI」）时，系统中会创建**多个 UUID 完全不同**的独立 `Entity` 节点。
+- **语境语义保留**：正因为实体的“分身”独立存在，每个 `Entity` 节点都可以保留自己所在 `Episode` 的特有语境描述（`description`），从而完美处理同一个实体在不同场景下语义不同的问题。此外，`Episode` 指向 `Entity` 的 `involves_entity` 边的 `edge_text` 也会包含这一语境信息。
+- **连线桥接**：系统提取统一的 `canonical_name`（规范名）作为纽带，将这些 UUID 不同的同名实体分身通过 `same_entity_as` 边弱关联起来。
+
+**效果**：既实现了跨树的逻辑贯通（可沿 `same_entity_as` 跳转聚合知识），
+又避免了让一个全局节点变成拥有几万条边的「超级节点」（Dense Sub-graph 问题）。
+
+> [!NOTE]
+> `same_entity_as` 是否能跨 Dataset 建立，取决于部署模式：  
+> - **隔离库模式**（`ENABLE_BACKEND_ACCESS_CONTROL=true`）：通常只在当前 Dataset 库内建立。  
+> - **共享库模式**（`ENABLE_BACKEND_ACCESS_CONTROL=false`）：可出现跨 Dataset 的同名连线。
+>
+> 同时要注意：`same_entity_as` 的建立依赖 `canonical_name` 命中结果，
+> 属于“可建立的弱关联”，并非“所有同名实体必然两两连通”。
 
 #### B. 证据共享（`ContentFragment` 共享）
 
 如果一段高密度原文同时涉及多个独立事件，多棵树的 `Episode` 会通过 `includes_chunk` 边
-指向同一个 `ContentFragment` 节点，形成底层的证据共享。
+指向同一个 `ContentFragment` 节点，形成底层证据共享。
+
+这也意味着 `Episode` 与 `Document` 并非一对一从属关系：系统默认是
+`Episode -> ContentFragment -> Document` 的**间接归属**。
 
 #### C. 演化边
 
 - **`derived_procedure`**：当某个 `Episode`（具体事实）中总结出了一条通用的 `Procedure`（规律/方法），
   两者之间会建立溯源边。
 - **`supersedes`**：当 `Procedure` 更新迭代时，新版本节点会通过此边指向旧版本。
+
+### 2.4 Episode 与原文节点的归属关系
+
+从源码实现看，Episode 层是“语义聚合层”，不是“文档直属子节点层”：
+
+- 没有强制性的 `Episode -> Document` 直接边；
+- `includes_chunk` 是证据挂载边，主要用于追踪与回溯；
+- 一个 Episode 可关联多个 chunk，进而可间接关联多个 Document（尤其在路由合并时）。
 
 ---
 
@@ -251,6 +291,34 @@ Connections:
 - 图谱节点中存储的是 LLM 提炼后的**高密度知识**，消除了原文中的冗余噪音
 - 通过边的拓扑关系，LLM 可以实现**跨文档多跳推理**
 
+#### 源码执行链（TRIPLET_COMPLETION）
+
+`TRIPLET_COMPLETION` 在代码中的核心链路是：
+
+1. `search()` 根据 `RecallMode.TRIPLET_COMPLETION` 选择 `UnifiedTripletSearch`；
+2. `UnifiedTripletSearch.get_context()` 调用 `fine_grained_triplet_search()`：
+   - 先在向量集合中做召回（默认 `Episode_summary`、`Entity_name`、`Concept_name`，并自动补 `RelationType_relationship_name`）；
+   - 再映射到图边并计算 triplet 重要度，得到候选三元组；
+3. `UnifiedTripletSearch.get_completion()` 将 triplet 组装为上下文，再调用 LLM 生成最终回答。
+
+#### 多 Dataset 检索行为（与单 Dataset差异）
+
+`TRIPLET_COMPLETION` 在多 Dataset 下并不总是等价于“一个大 Dataset”检索：
+
+- **`ENABLE_BACKEND_ACCESS_CONTROL=true`（隔离库模式，默认）**：  
+  由于每个 Dataset 拥有独立的物理图数据库，系统采用 **Map-Reduce（分而治之）** 的策略，无法在底层图数据库层面进行跨 Dataset 的多跳（Multi-hop）连通。
+  - 先解析“可读且存在”的 Dataset（若不传 `dataset_ids`，默认是用户可访问的全部 Dataset）；  
+  - **Map 阶段**：对每个 Dataset 并发执行 `_search_single_dataset`（每个任务先 `set_db_context(dataset, owner)` 连上对应的独立物理库，再进行检索）；  
+  - **Reduce 阶段** 的表现取决于 `use_combined_context` 参数：
+    - `use_combined_context=false`（默认）：**分别查询 + 分别总结**。系统会在各自的物理库中查出上下文后，分别唤起大模型，最终返回按 Dataset 严格分开的结果列表。优点是溯源清晰，绝无幻觉混淆；缺点是无法回答跨域宏观问题。
+    - `use_combined_context=true`：**分别查询 + 强行合并上下文**。系统提取各库的文本上下文（Context），通过换行符在 Python 内存中简单拼接成一篇“超长文本”，只唤起一次大模型生成综合回答。优点是能在一句话中融合多库信息；缺点是**图谱断裂**（大模型无法顺着图谱边进行跨域深度推理）且极易导致**上下文爆炸**和注意力稀释。
+- **`ENABLE_BACKEND_ACCESS_CONTROL=false`（共享库模式）**：  
+  - 走 `no_access_control_search` 单路径；  
+  - 不按 Dataset 循环切库，所有数据都在一个唯一的全局大库中；  
+  - `dataset_ids` 不参与后端 Dataset 过滤，等同于在共享图上的一次全局检索，完美支持跨 Dataset 的实体连通和多跳推理。
+
+因此，多 Dataset 查询与单 Dataset 查询在召回路径、排序竞争范围和最终答案组织上可能不同。
+
 **返回示例**（查询词：`杜工部草堂诗笺`）：
 
 `result`（LLM 生成的自然语言回答）：
@@ -371,8 +439,8 @@ M-Flow 内置了完整的权限管理体系：
 
 `Dataset` 是 M-Flow 对知识的最高管理容器，可映射为业务中的「书籍」、「项目」或「知识域」。
 
-- **入库隔离**：每本书/每个项目单独创建一个 `Dataset`，其切块和图谱节点均带有 `dataset_id` 标记。
-- **查询圈定**：调用 `search` 时可传入 `dataset_ids` 参数，严格限定检索范围。
+- **入库侧**：可指定目标 Dataset，但隔离语义与效果取决于 ACL 模式（见下表）。
+- **查询侧**：`dataset_ids` 仅在 ACL 开启时用于严格圈定检索范围。
 
 ```python
 # 仅在指定的两本书中检索
@@ -387,15 +455,60 @@ search_result = await m_flow_search(
 1. **第一层（权限校验）**：确保用户只能看到有权访问的 Dataset。
 2. **第二层（范围圈定）**：在用户的权限范围内，进一步缩小到其手动选择的 Dataset。
 
+| 场景 | `ENABLE_BACKEND_ACCESS_CONTROL=true` | `ENABLE_BACKEND_ACCESS_CONTROL=false` |
+|------|--------------------------------------|---------------------------------------|
+| 入库时指定 Dataset | 会切到该 Dataset 对应后端库（`set_db_context` 生效） | 不切独立库；共享库写入。Dataset 主要用于 Episode Routing 隔离（如 `current_dataset_id`） |
+| 查询时传 `dataset_ids` | 生效：仅在指定且有权限的 Dataset 中检索 | 默认不生效：走共享库全局检索，不按 `dataset_ids` 过滤 |
+| “只查某一个 Dataset” | 支持（参数 + 权限同时满足） | 默认不支持（需改源码增加过滤链路） |
+
+### 5.3 `ENABLE_BACKEND_ACCESS_CONTROL` 开关详解
+
+这是后端“权限控制 + 数据隔离”行为的总开关，默认值为 `true`。
+
+| 维度 | `true`（或未设置） | `false` |
+|------|--------------------|---------|
+| 数据库上下文 | 按 `dataset + owner` 切换图库/向量库（`set_db_context` 生效） | 共享库路径，不切独立 Dataset 库 |
+| 搜索执行路径 | 走授权搜索分支（按可访问 Dataset 检索） | 走 `no_access_control_search` |
+| `dataset_ids` 过滤能力 | 生效（参与 Dataset 解析与授权过滤） | 默认不生效（不进入 Dataset 级后端过滤） |
+| 接口参数约束 | 多个图谱/维护接口会要求显式 `dataset_id` 并校验权限 | 一般不强制 dataset 级权限校验 |
+| 认证强度 | 会提升为需要认证用户上下文 | 可运行在更偏单用户/弱权限模式 |
+
+> [!IMPORTANT]
+> 在源码中，该开关“未设置”会被按开启处理，并尝试校验后端是否支持 Dataset 级隔离；  
+> 若后端 handler 与 provider 不匹配，会直接报配置错误。
+
+### 5.4 ACL 关闭时的数据库选择能力
+
+在 `ENABLE_BACKEND_ACCESS_CONTROL=false` 下，系统默认使用共享后端配置（不按 Dataset 自动切库）。
+
+- **可指定单个后端配置**：可通过全局配置（如 `m_flow.config.set_*`）或单次运行参数覆盖，切到一组图库/向量库；
+- **不可在一次请求中并行指定多个数据库**：单次入库/查询仅连接一组后端配置；
+- 如需跨多个数据库聚合，需由上层编排多次调用后再聚合结果。
+
+### 5.5 物理库隔离与开关切换的危险性
+
+`ENABLE_BACKEND_ACCESS_CONTROL` 不是一个轻量级的“逻辑滤镜”，而是一个决定数据物理存放路径的**“铁轨扳道岔”**。
+
+- **开启时（隔离模式）**：写入数据时，`set_db_context` 会在硬盘上动态创建以 Dataset ID 命名的独立物理数据库文件/命名空间。
+- **关闭时（共享模式）**：写入数据时，所有数据被硬塞进默认的全局大库（如 `m_flow_graph_kuzu`）中，不区分 Dataset。
+
+> [!CAUTION]
+> **切勿在写入和查询之间随意翻转此开关！**
+> 假设你将开关设为 `false` 并写入了 Dataset A 和 B（数据进入了全局大库）。随后，你为了“查询安全”，将开关改为 `true` 并指定查询 Dataset A。
+> 系统此时会执行 `set_db_context(A)`，并在底层寻找 A 的专属物理库。由于你是在 `false` 时写入的，A 的专属库并不存在。系统会当场新建一个**空白**的图数据库，并在其中执行查询，最终返回**完全为空**的结果，并可能伴随“知识图谱为空”的日志警告。它绝对不会聪明地去全局大库里把 A 的数据提取出来。
+> **因此，写入和查询必须保持在相同的开关状态下。**
+
 ---
 
 ## 六、核心概念速查
 
 | 概念 | 本质 | 存储位置 |
 |------|------|---------|
+| `Document` | 原文容器（名称、路径、MIME、外部元信息） | 图数据库节点 + 向量数据库（`name`） |
 | `ContentFragment` | 原始文本切片（保留原文） | 图数据库节点 + 向量数据库 |
+| `FragmentDigest` | 由 chunk 派生的摘要中间节点（`made_from` 指向 chunk） | 图数据库节点 + 向量数据库 |
 | `Episode` | 情景记忆锚点（LLM 提炼的事件摘要） | 图数据库节点 + 向量数据库 |
-| `Entity` | 原子级实体（人名/书名/概念） | 图数据库节点 + 向量数据库 |
+| `Entity` | 上下文实体（ID 隐含 `episode_id` 从而隔离语义，同名实体通过 `same_entity_as` 互联） | 图数据库节点 + 向量数据库 |
 | `Facet` | Episode 的细节维度 | 图数据库节点 + 向量数据库 |
 | `FacetPoint` | Facet 下的细粒度信息点 | 图数据库节点 + 向量数据库 |
 | `Procedure` | 过程记忆锚点（方法论/SOP） | 图数据库节点 + 向量数据库 |
