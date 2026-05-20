@@ -11,7 +11,7 @@ type AppHeaderProps = {
 }
 
 const menuItems = [
-  { label: 'Dashboard', to: '/dashboard' },
+  { label: 'Dashboard', to: '/dashboard/ai-guide' },
   { label: 'Book', to: '/book' },
 ]
 
@@ -47,7 +47,7 @@ export default function AppHeader({
         <DropdownMenu.Portal>
           <DropdownMenu.Content className={styles.menuContent} align="end" sideOffset={10}>
             {menuItems.map((item) => {
-              const isActive = pathname === item.to
+              const isActive = item.to.startsWith('/dashboard') ? pathname.startsWith('/dashboard') : pathname === item.to
 
               return (
                 <DropdownMenu.Item className={styles.menuItem} asChild key={item.to}>

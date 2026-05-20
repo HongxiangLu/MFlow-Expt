@@ -1,0 +1,94 @@
+.stageRoot {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 24px;
+  pointer-events: none;
+}
+
+.headline {
+  display: grid;
+  gap: 6px;
+  max-width: 280px;
+
+  p,
+  h3 {
+    margin: 0;
+  }
+
+  p {
+    color: rgba(232, 212, 153, 0.72);
+    font-size: 11px;
+    line-height: 15px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  h3 {
+    color: #f2dfab;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(24px, 2.4vw, 34px);
+    font-weight: 500;
+    line-height: 1.16;
+    text-shadow: 0 12px 28px rgba(0, 0, 0, 0.48);
+  }
+}
+
+.chips {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.chip {
+  padding: 7px 11px;
+  border: 1px solid rgba(212, 175, 55, 0.16);
+  border-radius: 999px;
+  background: rgba(7, 7, 7, 0.52);
+  backdrop-filter: blur(10px);
+  color: #e0c678;
+  font-size: 11px;
+  line-height: 15px;
+  letter-spacing: 0.04em;
+  box-shadow: 0 14px 24px rgba(0, 0, 0, 0.22);
+}
+
+.tipBar {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+
+  span {
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.34);
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 11px;
+    line-height: 15px;
+  }
+}
+
+@media (max-width: 1280px) {
+  .overlay {
+    padding: 18px;
+  }
+
+  .headline h3 {
+    font-size: 22px;
+  }
+}

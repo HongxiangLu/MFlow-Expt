@@ -249,6 +249,421 @@ $copy: #d4d4d8;
   }
 }
 
+.collectionList {
+  display: grid;
+  gap: 14px;
+}
+
+.collectionItem {
+  padding: 16px;
+  border: 1px solid rgba(212, 175, 55, 0.18);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01)),
+    rgba(13, 13, 13, 0.96);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    border-color: rgba(212, 175, 55, 0.45);
+    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.26);
+  }
+}
+
+.activeCollectionItem {
+  border-color: rgba(212, 175, 55, 0.58);
+  background:
+    linear-gradient(180deg, rgba(212, 175, 55, 0.14), rgba(212, 175, 55, 0.04)),
+    rgba(13, 13, 13, 0.98);
+  box-shadow: 0 18px 32px rgba(0, 0, 0, 0.28);
+}
+
+.collectionItemHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  h3 {
+    margin: 0;
+    color: $gold-text;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 18px;
+    font-weight: 500;
+    line-height: 24px;
+  }
+
+  span {
+    flex: 0 0 auto;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: rgba(212, 175, 55, 0.14);
+    color: $gold;
+    font-size: 11px;
+    line-height: 15px;
+  }
+}
+
+.collectionMeta {
+  margin: 10px 0 0;
+  color: $gold;
+  font-size: 12px;
+  line-height: 18px;
+  letter-spacing: 0.4px;
+  opacity: 0.82;
+}
+
+.collectionSummary {
+  margin: 10px 0 0;
+  color: #a8a8b2;
+  font-size: 13px;
+  line-height: 22px;
+}
+
+.moduleSidebarContent {
+  display: grid;
+  gap: 22px;
+}
+
+.collectionEmptyPanel {
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid $border;
+  background: linear-gradient(180deg, #080808 0%, #0b0b0b 52%, #101010 100%);
+}
+
+.modulePlaceholderPanel {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid $border;
+  background:
+    radial-gradient(circle at 50% 28%, rgba(212, 175, 55, 0.08), transparent 34%),
+    linear-gradient(180deg, #080808 0%, #0b0b0b 52%, #101010 100%);
+}
+
+.modulePlaceholderStage {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 16px;
+  padding: 32px;
+  text-align: center;
+
+  h3 {
+    margin: 0;
+    color: $gold-text;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(28px, 3vw, 42px);
+    font-weight: 500;
+    line-height: 1.2;
+  }
+
+  p {
+    max-width: 420px;
+    margin: 0;
+    color: #9f9fa9;
+    font-size: 14px;
+    line-height: 24px;
+  }
+}
+
+.modulePlaceholderBadge {
+  padding: 6px 12px;
+  border: 1px solid rgba(212, 175, 55, 0.22);
+  border-radius: 999px;
+  background: rgba(212, 175, 55, 0.08);
+  color: $gold;
+  font-size: 12px;
+  line-height: 16px;
+  letter-spacing: 0.6px;
+}
+
+.collectionModelPanel {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid $border;
+  background:
+    radial-gradient(circle at 50% 30%, rgba(212, 175, 55, 0.12), transparent 34%),
+    linear-gradient(180deg, #080808 0%, #0b0b0b 52%, #101010 100%);
+}
+
+.collectionModelHeader,
+.collectionInfoHeader {
+  flex: 0 0 auto;
+  padding: 24px;
+  border-bottom: 1px solid rgba(42, 36, 27, 0.42);
+
+  h2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    color: $gold-text;
+    font-size: 18px;
+    font-weight: 500;
+    line-height: 28px;
+  }
+
+  p {
+    margin: 6px 0 0;
+    color: $muted;
+    font-size: 12px;
+    line-height: 16px;
+  }
+}
+
+.collectionModelHeader h2 svg,
+.collectionInfoHeader h2 svg {
+  color: $gold;
+}
+
+.collectionModelStage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 28px 28px 0;
+  overflow: hidden;
+  border: 1px solid rgba(212, 175, 55, 0.14);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(212, 175, 55, 0.16), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01)),
+    #0d0d0d;
+}
+
+.modelHalo,
+.modelRing,
+.modelPedestal,
+.modelObject,
+.modelStageLabel {
+  position: absolute;
+}
+
+.modelHalo {
+  inset: auto 18% 16% 18%;
+  height: 160px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(212, 175, 55, 0.26), rgba(212, 175, 55, 0) 72%);
+  filter: blur(16px);
+}
+
+.modelRing {
+  inset: auto 20% 18% 20%;
+  height: 150px;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 1px rgba(212, 175, 55, 0.06) inset,
+    0 0 28px rgba(212, 175, 55, 0.08);
+}
+
+.modelPedestal {
+  right: 22%;
+  bottom: 16%;
+  left: 22%;
+  height: 24px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(212, 175, 55, 0.22), rgba(212, 175, 55, 0.04));
+}
+
+.modelObject {
+  top: 15%;
+  right: 28%;
+  left: 28%;
+  bottom: 24%;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 12px;
+  border: 1px solid rgba(212, 175, 55, 0.18);
+  border-radius: 32% 32% 24% 24%;
+  background:
+    linear-gradient(180deg, rgba(212, 175, 55, 0.2), rgba(140, 115, 35, 0.08)),
+    rgba(20, 18, 12, 0.88);
+  box-shadow:
+    0 24px 50px rgba(0, 0, 0, 0.34),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+
+  strong {
+    color: $gold-text;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(32px, 4vw, 54px);
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: 2px;
+  }
+
+  span {
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.24);
+    color: $gold;
+    font-size: 12px;
+    line-height: 16px;
+    letter-spacing: 0.6px;
+  }
+}
+
+.modelStageLabel {
+  left: 24px;
+  bottom: 24px;
+  display: grid;
+  gap: 4px;
+
+  p {
+    margin: 0;
+    color: #8f8f98;
+    font-size: 11px;
+    line-height: 15px;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+  }
+
+  h3 {
+    margin: 0;
+    color: $gold-text;
+    font-size: 22px;
+    font-weight: 500;
+    line-height: 30px;
+  }
+}
+
+.modelAssistBar {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 20px 28px 28px;
+
+  div {
+    padding: 14px 16px;
+    border: 1px solid rgba(212, 175, 55, 0.12);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  span {
+    display: block;
+    color: #7d7d86;
+    font-size: 11px;
+    line-height: 15px;
+  }
+
+  strong {
+    display: block;
+    margin-top: 6px;
+    color: $copy;
+    font-size: 13px;
+    line-height: 20px;
+    font-weight: 500;
+  }
+}
+
+.collectionInfoSidebar {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: $surface;
+}
+
+.collectionInfoBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 22px 24px 28px;
+  overflow-y: auto;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.collectionFactGrid {
+  display: grid;
+  gap: 12px;
+
+  article {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 14px 0;
+    border-bottom: 1px solid rgba(212, 175, 55, 0.12);
+  }
+
+  span {
+    color: $muted;
+    font-size: 13px;
+    line-height: 18px;
+  }
+
+  strong {
+    max-width: 240px;
+    color: $copy;
+    font-size: 14px;
+    line-height: 22px;
+    text-align: right;
+    font-weight: 500;
+  }
+}
+
+.collectionDescriptionBlock,
+.collectionHighlightsBlock {
+  display: grid;
+  gap: 10px;
+
+  h3 {
+    margin: 0;
+    color: $gold-text;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 18px;
+  }
+
+  p {
+    margin: 0;
+    color: #a8a8b2;
+    font-size: 13px;
+    line-height: 23px;
+  }
+}
+
+.collectionHighlightsList {
+  display: grid;
+  gap: 8px;
+
+  p {
+    padding-left: 16px;
+    position: relative;
+  }
+
+  p::before {
+    position: absolute;
+    top: 9px;
+    left: 0;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: $gold;
+    content: "";
+  }
+}
+
 .chatPanel {
   position: relative;
   min-width: 0;
@@ -742,7 +1157,8 @@ $copy: #d4d4d8;
   justify-content: space-between;
   margin: 0 auto;
 
-  > button {
+  > button,
+  > a {
     height: 53px;
     display: grid;
     justify-items: center;
@@ -754,42 +1170,44 @@ $copy: #d4d4d8;
     font-size: 10px;
     font-weight: 500;
     line-height: 15px;
+    text-decoration: none;
     cursor: pointer;
   }
 }
 
-.aiNavButton {
-  position: relative;
-  top: -28px;
-  height: 79px !important;
-  color: $gold !important;
+.activeNavItem {
+  color: $gold-text !important;
 
-  > span {
-    width: 56px;
-    height: 56px;
-    display: grid;
-    place-items: center;
-    padding: 2px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #d4af37 0%, #8c7323 100%);
-    box-shadow:
-      0 10px 15px rgba(212, 175, 55, 0.2),
-      0 4px 6px rgba(212, 175, 55, 0.2);
-
-    svg {
-      width: 52px;
-      height: 52px;
-      padding: 14px;
-      border-radius: 50%;
-      background: $surface-soft;
-      color: $gold;
-    }
+  svg {
+    color: $gold;
   }
 
-  strong {
-    font-size: 11px;
-    font-weight: 500;
-    line-height: 16.5px;
+  .aiNavIcon svg {
+    color: $gold;
+  }
+}
+
+.aiNavButton {
+  color: #71717b;
+}
+
+.aiNavIcon {
+  width: auto;
+  height: auto;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+
+  svg {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    color: #71717b;
   }
 }
 
@@ -837,6 +1255,73 @@ $copy: #d4d4d8;
 
   .factRow dd {
     max-width: 145px;
+  }
+
+  .collectionItem {
+    padding: 12px;
+  }
+
+  .collectionItemHeader h3 {
+    font-size: 14px;
+    line-height: 20px;
+  }
+
+  .collectionModelHeader,
+  .collectionInfoHeader {
+    padding: 16px;
+
+    h2 {
+      font-size: 16px;
+      line-height: 24px;
+    }
+  }
+
+  .collectionModelStage {
+    margin: 18px 16px 0;
+    border-radius: 18px;
+  }
+
+  .modulePlaceholderStage {
+    padding: 24px;
+
+    h3 {
+      font-size: 24px;
+    }
+
+    p {
+      font-size: 12px;
+      line-height: 20px;
+    }
+  }
+
+  .collectionEmptyPanel {
+    min-height: 320px;
+  }
+
+  .modelObject {
+    right: 18%;
+    left: 18%;
+
+    strong {
+      font-size: 28px;
+    }
+  }
+
+  .modelAssistBar {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 16px;
+  }
+
+  .collectionInfoBody {
+    gap: 16px;
+    padding: 16px;
+  }
+
+  .collectionMeta,
+  .collectionSummary {
+    font-size: 11px;
+    line-height: 18px;
   }
 
   .chatContent,
