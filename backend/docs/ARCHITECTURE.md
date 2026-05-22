@@ -52,11 +52,27 @@ backend/
 │   ├── chat_service.py      # 对话全链路逻辑 (检索 -> 组装 -> 推流 -> 落盘)
 │   ├── graph_service.py     # 图谱全链路逻辑 (重写 -> 检索 -> 格式化)
 │   └── mflow_client.py      # M-Flow 本地库的调用封装门面 (Facade)
-├── requirements.txt         # 核心依赖清单 (fastapi, uvicorn, sqlalchemy, openai 等)
-├── .env.example             # 环境变量模板
+├── docs/                    # 项目设计与规范文档
+│   ├── API.md               # RESTful 接口契约与数据格式
+│   ├── ARCHITECTURE.md      # 系统架构设计文档（即本文件）
+│   ├── DEVELOPMENT_PLAN.md  # 分阶段开发计划
+│   ├── MFLOW_FIX.md         # M-Flow 库源码修补方案与一键脚本说明
+│   ├── MFLOW_GUIDE.md       # M-Flow 引擎核心机制指南
+│   └── REQUIREMENTS.md      # 需求与架构说明书 (SRS/PRD)
 ├── tests/                   # 测试目录
+│   ├── test_db.py           # 数据库引擎与 ORM 验证
+│   ├── test_llm.py          # LLM 客户端连通性测试
+│   ├── test_mflow.py        # M-Flow 检索完整性与数据映射测试
+│   └── test_services.py     # 业务逻辑端到端测试 (Chat / Graph 全链路)
 ├── tools/                   # 开发辅助脚本（非运行时业务模块）
-└── README.md                # 项目简介
+│   ├── data_input.py        # M-Flow 数据入库测试与耗时统计脚本
+│   ├── patch_mflow.py       # M-Flow 源码一键自动修补脚本
+│   └── file*.md             # 入库测试用原始数据文件
+├── requirements.txt         # 核心依赖清单 (mflow-ai, sse_starlette 等)
+├── .env.example             # 环境变量模板
+├── .gitignore               # Git 忽略规则
+├── TODO.md                  # 开发任务清单
+└── README.md                # 项目简介与文档索引
 ```
 
 ---
