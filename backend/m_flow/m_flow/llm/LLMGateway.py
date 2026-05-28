@@ -142,8 +142,7 @@ class LLMService:
 
         async with llm_rate_limiter_context_manager():
             messages = [
-                {"role": "system", "content": instructions},
-                {"role": "user", "content": source_text},
+                {"role": "user", "content": instructions + "\n\n" + source_text},
             ]
 
             _log.debug(

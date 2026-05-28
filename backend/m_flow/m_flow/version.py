@@ -27,7 +27,7 @@ def get_version() -> str:
 
     # 1. Installed package (pip / wheel)
     try:
-        _CACHED = importlib.metadata.version("m_flow")
+        _CACHED = importlib.metadata.version("mflow-ai")
         return _CACHED
     except importlib.metadata.PackageNotFoundError:
         pass

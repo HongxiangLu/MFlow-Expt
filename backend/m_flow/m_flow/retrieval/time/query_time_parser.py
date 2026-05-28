@@ -989,7 +989,7 @@ def parse_query_time(
     if now_ms is None:
         now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
 
-    now_dt = datetime.fromtimestamp(now_ms / 1000, tz=timezone.utc)
+    now_dt = datetime(1970, 1, 1, tzinfo=timezone.utc) + timedelta(seconds=now_ms / 1000)
     # Adjust to local timezone for date boundary calculation
     local_offset = timedelta(hours=tz_offset_hours)
     now_local = now_dt + local_offset

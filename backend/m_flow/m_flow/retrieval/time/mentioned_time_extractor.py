@@ -124,7 +124,7 @@ def _extract_anchor_from_explicit_dates(text: str) -> Optional[int]:
 
                 # Convert to timestamp (start of day UTC)
                 dt = datetime(year, month, day, 0, 0, 0, tzinfo=timezone.utc)
-                ts_ms = int(dt.timestamp() * 1000)
+                ts_ms = int((dt - datetime(1970, 1, 1, tzinfo=timezone.utc)).total_seconds() * 1000)
 
                 # Keep earliest date
                 if earliest_ms is None or ts_ms < earliest_ms:

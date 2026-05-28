@@ -211,8 +211,7 @@ class OpenAIAdapter(LLMBackend):
     def _build_messages(self, user_input: str, system_prompt: str) -> list:
         """Construct chat message list."""
         return [
-            {"role": "user", "content": user_input},
-            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": system_prompt + "\n\n" + user_input},
         ]
 
     def _is_policy_error(self, exc: Exception) -> bool:

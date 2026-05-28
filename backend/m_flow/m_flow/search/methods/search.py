@@ -397,6 +397,10 @@ async def _authorized_search_impl(
 
         completion_fn = tools[0]
         combined_ctx = _merge_context_values(merged_context)
+
+        if only_context:
+            return None, combined_ctx, all_datasets
+
         answer = await completion_fn(query_text, combined_ctx, session_id=session_id)
 
         return answer, combined_ctx, all_datasets

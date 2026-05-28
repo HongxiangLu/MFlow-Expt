@@ -17,4 +17,4 @@ CRITICAL RULES:
 
 Match input text language EXACTLY. English in → English out. Chinese in → Chinese out.
 
-Output JSON array of entity names only.
+Output a JSON object with a "names" field containing the array of entity names.
