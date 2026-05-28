@@ -9,7 +9,9 @@
 
 技术栈：FastAPI · SQLAlchemy (async) · SQLite · M-Flow · OpenAI SDK (MiniMax) · SSE
 
----
+## M-Flow 源码说明
+
+本项目中的 [`m_flow/`](./m_flow) 目录是从 [M-Flow GitHub 仓库](https://github.com/FlowElement-ai/m_flow) 克隆的源码，已脱离上游 Git 历史，作为项目代码的一部分直接管理。采用源码引用（而非 pip 包）的目的是**方便对 M-Flow 进行深度定制修改**，包括 Prompt 模板适配、模型兼容性处理、平台兼容性修复等。
 
 ## 📖 文档索引
 
@@ -23,10 +25,6 @@
 | [MFLOW_GUIDE.md](./docs/MFLOW_GUIDE.md) | **M-Flow 引擎核心机制指南**。从原理层面系统性介绍 M-Flow 的知识摄入流水线（切分→抽取→建图）、知识图谱的拓扑组织结构、工作原理与选型指南。 |
 | [DEVELOPMENT_PLAN.md](./docs/DEVELOPMENT_PLAN.md) | **分阶段开发计划**。按自底向上的开发方法论，将项目拆分为 7 个阶段（配置系统 → 数据访问层 → 外部集成层 → 业务逻辑层 → 路由控制层 → 应用入口 → 端到端集成测试），每阶段标注产出文件、关键设计、验证方式与预估工时。 |
 | [MFLOW_DEV.md](./docs/MFLOW_DEV.md) | **M-Flow 源码修改日志**。记录对项目内 `m_flow/` 源码的所有直接修改。 |
-
-## M-Flow 源码说明
-
-本项目中的 [`m_flow/`](./m_flow) 目录是从 [M-Flow GitHub 仓库](https://github.com/FlowElement-ai/m_flow) 克隆的源码，已脱离上游 Git 历史，作为项目代码的一部分直接管理。采用源码引用（而非 pip 包）的目的是**方便对 M-Flow 进行深度定制修改**，包括 Prompt 模板适配、模型兼容性处理、平台兼容性修复等。
 
 ## 启动步骤
 
