@@ -24,8 +24,65 @@
 | [DEVELOPMENT_PLAN.md](./docs/DEVELOPMENT_PLAN.md) | **分阶段开发计划**。按自底向上的开发方法论，将项目拆分为 7 个阶段（配置系统 → 数据访问层 → 外部集成层 → 业务逻辑层 → 路由控制层 → 应用入口 → 端到端集成测试），每阶段标注产出文件、关键设计、验证方式与预估工时。 |
 | [MFLOW_FIX.md](./docs/MFLOW_FIX.md) | **M-Flow 源码修补方案**。记录本项目所需的全部 M-Flow 库源码级修改（Prompt 模板适配、Pydantic Schema 修正、MiniMax 模型兼容性处理、Windows 负数时间戳兼容、`only_context` 逻辑缺陷修复、版本标识修正等），以及项目数据迁移注意事项。附带一键自动修补脚本 [`patch_mflow.py`](./tools/patch_mflow.py)。 |
 
-> [!IMPORTANT]
-> **首次使用本项目前**，请务必先阅读 [MFLOW_FIX.md](./docs/MFLOW_FIX.md)，了解需要对 M-Flow 库源码进行的适配修改，然后执行自动修补脚本 [`python tools/patch_mflow.py`](./tools/patch_mflow.py) 完成所有修补。未执行修补将导致知识入库与检索流程出现兼容性异常。
+## M-Flow 源码说明
+
+本项目中的 [`m_flow/`](./m_flow) 目录是从 [M-Flow GitHub 仓库](https://github.com/FlowElement-ai/m_flow) 克隆的源码，已脱离上游 Git 历史，作为项目代码的一部分直接管理。采用源码引用（而非 pip 包）的目的是**方便对 M-Flow 进行深度定制修改**，包括 Prompt 模板适配、模型兼容性处理、平台兼容性修复等。
+
+## 启动步骤
+
+**1. 创建 Conda 环境**
+
+```bash
+conda create -n mflow python=3.13.3
+conda activate mflow
+```
+
+**2. 安装 M-Flow（editable 模式）**
+
+以 editable 模式安装本地 M-Flow 源码，修改源码后无需重新安装即可生效：
+
+```bash
+pip install -e ./m_flow -i https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+**3. 安装其他依赖**
+
+```bash
+pip install sse_starlette -i https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+**4. 配置环境变量**
+
+复制 `.env.example` 为 `.env`，填入所需的 API Key 等配置：
+
+```bash
+copy .env.example .env
+```
+
+**5. 启动开发服务器**
+
+```bash
+python main.py
+```
+
+---
+
+## 知识库建立
+
+后端的 RAG 能力依赖 M-Flow 知识库中的数据。在启动服务前，需要先将原始文档数据灌入 M-Flow 知识引擎。入库工具位于 [`tools/data_input.py`](./tools/data_input.py)。
+
+M-Flow 的数据入库分为两个阶段：`m_flow.add()`（将原始数据挂载到指定 Dataset）→ `m_flow.memorize()`（触发 LLM 进行切块、实体识别、图谱构建并持久化）。具体参数与用法参见 `data_input.py` 源码。
+
+执行入库：
+
+```bash
+conda activate mflow
+cd backend
+python tools/data_input.py
+```
+
+**当前已入库内容**：[`tools/file.md`](./tools/file.md) 中从开头到"齐都水印"封泥的部分。
+
 
 ---
 
