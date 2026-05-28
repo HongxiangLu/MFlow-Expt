@@ -18,11 +18,11 @@
 | 文档 | 内容与作用 |
 |:-----|:----------|
 | [REQUIREMENTS.md](./docs/REQUIREMENTS.md) | **需求与架构说明书 (SRS/PRD)**。定义项目背景、核心技术选型理由、两大核心接口（Chat / Graph Query）的完整业务流、数据模型与状态管理策略、以及 MVP 阶段的非功能性约束（单用户模式、扩展性留白等）。是整个项目的需求基线。 |
-| [ARCHITECTURE.md](./docs/ARCHITECTURE.md) | **系统架构设计文档**。详述 Controller → Service → Data Access 三层架构、项目目录结构、各核心模块的职责与实现细节（路由层、业务逻辑层、M-Flow Facade、数据模型、LLM 集成），以及 M-Flow 检索降时策略（模式切换、参数调优、缓存、日志优化、耗时埋点等性能优化专项）。 |
-| [API.md](./docs/API.md) | **API 接口文档**。定义所有 RESTful 接口的请求/响应契约，包括 SSE 流式数据帧格式、SSE 流内错误事件规范（错误码枚举）、检索降级策略、图谱响应的完整 TypeScript 类型定义与字段校验规则，附带详尽的请求/响应示例。 |
-| [MFLOW_GUIDE.md](./docs/MFLOW_GUIDE.md) | **M-Flow 引擎核心机制指南**。从原理层面系统性介绍 M-Flow 的知识摄入流水线（切分→抽取→建图）、知识图谱的森林拓扑组织结构（Episode/Facet/Entity 等节点层级与跨树连接机制）、三层异构存储架构（图数据库 + 向量数据库 + 关系型数据库）、五种检索模式（CHUNKS_LEXICAL / TRIPLET_COMPLETION / EPISODIC / PROCEDURAL / CYPHER）的工作原理与选型指南，以及企业级多租户权限控制与数据集隔离能力。 |
+| [ARCHITECTURE.md](./docs/ARCHITECTURE.md) | **系统架构设计文档**。详述 Controller → Service → Data Access 三层架构、项目目录结构、各核心模块的职责与实现细节，以及 M-Flow 检索降时策略。 |
+| [API.md](./docs/API.md) | **API 接口文档**。定义所有 RESTful 接口的请求/响应契约，包括 SSE 流式数据帧格式、图谱响应的完整 TypeScript 类型定义与字段校验规则，附带详尽的请求/响应示例。 |
+| [MFLOW_GUIDE.md](./docs/MFLOW_GUIDE.md) | **M-Flow 引擎核心机制指南**。从原理层面系统性介绍 M-Flow 的知识摄入流水线（切分→抽取→建图）、知识图谱的拓扑组织结构、工作原理与选型指南。 |
 | [DEVELOPMENT_PLAN.md](./docs/DEVELOPMENT_PLAN.md) | **分阶段开发计划**。按自底向上的开发方法论，将项目拆分为 7 个阶段（配置系统 → 数据访问层 → 外部集成层 → 业务逻辑层 → 路由控制层 → 应用入口 → 端到端集成测试），每阶段标注产出文件、关键设计、验证方式与预估工时。 |
-| [MFLOW_FIX.md](./docs/MFLOW_FIX.md) | **M-Flow 源码修补方案**。记录本项目所需的全部 M-Flow 库源码级修改（Prompt 模板适配、Pydantic Schema 修正、MiniMax 模型兼容性处理、Windows 负数时间戳兼容、`only_context` 逻辑缺陷修复、版本标识修正等），以及项目数据迁移注意事项。附带一键自动修补脚本 [`patch_mflow.py`](./tools/patch_mflow.py)。 |
+| [MFLOW_DEV.md](./docs/MFLOW_DEV.md) | **M-Flow 源码修改日志**。记录对项目内 `m_flow/` 源码的所有直接修改。 |
 
 ## M-Flow 源码说明
 
@@ -83,6 +83,26 @@ python tools/data_input.py
 
 **当前已入库内容**：[`tools/file.md`](./tools/file.md) 中从开头到"齐都水印"封泥的部分。
 
+---
+
+## 项目数据迁移
+
+移动项目目录后，向量检索可能返回空结果。这是因为 M-Flow 入库时会将向量数据库的**绝对路径**写入 SQLite（`dataset_database.vector_database_url`），迁移后路径失效。
+
+修复方法——将数据库中的旧路径替换为新路径：
+
+```bash
+cd backend
+python -c "
+import sqlite3
+conn = sqlite3.connect(r'.runtime\system\databases\experiment_mflow')
+cur = conn.cursor()
+cur.execute(\"UPDATE dataset_database SET vector_database_url = REPLACE(vector_database_url, '<旧路径>', '<新路径>')\")
+conn.commit()
+print('Updated', cur.rowcount, 'row(s)')
+conn.close()
+"
+```
 
 ---
 

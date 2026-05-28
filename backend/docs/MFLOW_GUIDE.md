@@ -43,6 +43,11 @@
 
 上述产物之间通过语义边互相连接，最终形成结构化的知识图谱，写入图数据库。
 
+M-Flow 默认构建的是**片段式记忆网络（Cone Graph / Episodic Memory）**，而非传统的点对点语义三元组知识图谱。这意味着：
+
+- **入库阶段**：LLM 只负责抽取节点实体，**不负责**推断实体与实体之间的直接动作关系（Prompt 中明确限定 `Edge/relationship inference is handled downstream`）。写入数据库的边 label 是框架代码中硬编码的结构化名称（如 `involves_entity`、`has_facet` 等），开发者不需要预定义动作关系白名单。
+- **检索阶段（TRIPLET_COMPLETION）**：系统通过图游走算法沿着 `[实体] <- [involves_entity] - [片段] - [involves_entity] -> [实体]` 的路径进行三元组补全，前端拿到的图谱连线实质上是这些结构化边的投射。
+
 ### 1.4 原文证据链（源码实证）
 
 M-Flow 中“原文到情景记忆”的关键链路是：
